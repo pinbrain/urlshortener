@@ -16,14 +16,14 @@ const (
 )
 
 func Run() error {
-	baseUrl := &url.URL{
+	baseURL := &url.URL{
 		Scheme: serverScheme,
 		Host:   serverHost + serverPort,
 		Path:   urlHandlerPath,
 	}
 
-	urlStore := storage.NewUrlMapStore()
-	urlHandler := handlers.NewUrlHandler(urlStore, baseUrl.String())
+	urlStore := storage.NewURLMapStore()
+	urlHandler := handlers.NewURLHandler(urlStore, baseURL.String())
 	mux := http.NewServeMux()
 	mux.HandleFunc(urlHandlerPath, urlHandler.HandleRequest)
 	return http.ListenAndServe(serverPort, mux)

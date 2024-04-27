@@ -10,31 +10,31 @@ import (
 	"github.com/pinbrain/urlshortener/internal/utils"
 )
 
-type UrlHandler struct {
-	urlStore storage.UrlStorage
-	baseUrl  string
+type URLHandler struct {
+	urlStore storage.URLStorage
+	baseURL  string
 }
 
-func NewUrlHandler(urlStore storage.UrlStorage, baseUrl string) UrlHandler {
-	return UrlHandler{
+func NewURLHandler(urlStore storage.URLStorage, baseURL string) URLHandler {
+	return URLHandler{
 		urlStore: urlStore,
-		baseUrl:  baseUrl,
+		baseURL:  baseURL,
 	}
 }
 
-func (h *UrlHandler) HandleRequest(w http.ResponseWriter, r *http.Request) {
+func (h *URLHandler) HandleRequest(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		h.HandleRedirect(w, r)
 	case http.MethodPost:
-		h.HandleShortenUrl(w, r)
+		h.HandleShortenURL(w, r)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
 }
 
-func (h *UrlHandler) HandleShortenUrl(w http.ResponseWriter, r *http.Request) {
+func (h *URLHandler) HandleShortenURL(w http.ResponseWriter, r *http.Request) {
 	contentType := r.Header.Get("Content-Type")
 	if !strings.Contains(contentType, "text/plain") {
 		http.Error(w, "Invalid content type", http.StatusBadRequest)
@@ -47,29 +47,29 @@ func (h *UrlHandler) HandleShortenUrl(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	url := string(body)
-	isValidUrl := utils.IsValidUrlString(url)
-	if !isValidUrl {
+	isValidURL := utils.IsValidURLString(url)
+	if !isValidURL {
 		http.Error(w, "Некорректная ссылка для сокращения", http.StatusBadRequest)
 		return
 	}
-	urlID, err := h.urlStore.SaveUrl(url)
+	urlID, err := h.urlStore.SaveURL(url)
 	if err != nil {
 		fmt.Println(err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-	shortUrl := h.baseUrl + urlID
+	shortURL := h.baseURL + urlID
 	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte(shortUrl))
+	w.Write([]byte(shortURL))
 }
 
-func (h *UrlHandler) HandleRedirect(w http.ResponseWriter, r *http.Request) {
+func (h *URLHandler) HandleRedirect(w http.ResponseWriter, r *http.Request) {
 	urlID := r.URL.Path[1:]
-	if !h.urlStore.IsValidUrlID(urlID) {
+	if !h.urlStore.IsValidID(urlID) {
 		http.Error(w, "Некорректная ссылка", http.StatusBadRequest)
 		return
 	}
-	url, err := h.urlStore.GetUrl(urlID)
+	url, err := h.urlStore.GetURL(urlID)
 	if err != nil {
 		fmt.Println(err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)

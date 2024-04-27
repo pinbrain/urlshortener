@@ -19,7 +19,7 @@ func NewRandomString(length int) string {
 	return string(randomBytes)
 }
 
-func IsValidUrlString(urlStr string) bool {
-	parsedUrl, err := url.ParseRequestURI(urlStr)
-	return err == nil && parsedUrl.Scheme != "" && parsedUrl.Host != ""
+func IsValidURLString(urlStr string) bool {
+	parsedURL, err := url.ParseRequestURI(urlStr)
+	return err == nil && parsedURL.Scheme != "" && parsedURL.Host != ""
 }
