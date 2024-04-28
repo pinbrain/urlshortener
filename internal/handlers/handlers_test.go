@@ -212,6 +212,7 @@ func TestURLHandler_HandleRedirect(t *testing.T) {
 			handler.HandleRedirect(w, request)
 
 			res := w.Result()
+			defer res.Body.Close()
 			assert.Equal(t, tt.want.statusCode, res.StatusCode)
 			assert.Equal(t, tt.want.location, res.Header.Get("Location"))
 		})
@@ -282,6 +283,7 @@ func TestURLHandler_HandleRequest(t *testing.T) {
 			handler.HandleRequest(w, request)
 
 			res := w.Result()
+			defer res.Body.Close()
 			assert.Equal(t, tt.want.statusCode, res.StatusCode)
 		})
 	}
