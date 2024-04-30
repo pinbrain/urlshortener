@@ -3,6 +3,7 @@ module github.com/pinbrain/urlshortener
 go 1.21.9
 
 require (
+	github.com/caarlos0/env/v11 v11.0.0
 	github.com/go-chi/chi/v5 v5.0.12
 	github.com/stretchr/testify v1.9.0
 )

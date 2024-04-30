@@ -22,16 +22,11 @@ type URLHandler struct {
 	baseURL  *url.URL
 }
 
-func NewURLHandler(urlStore URLStorage, baseURLStr string) (URLHandler, error) {
-	urlHandler := URLHandler{
+func NewURLHandler(urlStore URLStorage, baseURL url.URL) URLHandler {
+	return URLHandler{
 		urlStore: urlStore,
+		baseURL:  &baseURL,
 	}
-	baseURL, err := url.Parse(baseURLStr)
-	if err != nil {
-		return urlHandler, err
-	}
-	urlHandler.baseURL = baseURL
-	return urlHandler, nil
 }
 
 func (h *URLHandler) HandleShortenURL(w http.ResponseWriter, r *http.Request) {

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -98,8 +99,9 @@ func TestURLHandler_HandleShortenURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockStorage := new(mocks.MockURLStorage)
-			handler, err := NewURLHandler(mockStorage, tt.baseURL)
+			baseURL, err := url.Parse(tt.baseURL)
 			require.NoError(t, err)
+			handler := NewURLHandler(mockStorage, *baseURL)
 
 			mockStorage.On("SaveURL", tt.request.url).Return(tt.urlStore.urlID, tt.urlStore.urlStoreError)
 
@@ -206,8 +208,11 @@ func TestURLHandler_HandleRedirect(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockStorage := new(mocks.MockURLStorage)
-			handler, err := NewURLHandler(mockStorage, "http://localhost:8080/")
-			require.NoError(t, err)
+			// handler, err := NewURLHandler(mockStorage, "http://localhost:8080/")
+			handler := NewURLHandler(mockStorage, url.URL{
+				Scheme: "http",
+				Host:   "localhost:8080",
+			})
 
 			mockStorage.On("GetURL", tt.request.urlID).Return(tt.urlStore.url, tt.urlStore.urlStoreError)
 			mockStorage.On("IsValidID", tt.request.urlID).Return(tt.urlStore.isValidID)

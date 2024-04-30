@@ -1,21 +1,50 @@
 package config
 
 import (
-	"errors"
+	"flag"
+	"net/url"
 
-	"github.com/pinbrain/urlshortener/internal/utils"
+	"github.com/caarlos0/env/v11"
 )
 
 type ServerConf struct {
-	RunAddress string
-	BaseURL    string
+	ServerAddress string  `env:"SERVER_ADDRESS"`
+	BaseURL       url.URL `env:"BASE_URL"`
+}
+
+func loadFlags(cfg *ServerConf) error {
+	flag.StringVar(&cfg.ServerAddress, "a", ":8080", "Адрес запуска HTTP-сервера")
+	baseURLStr := flag.String("b", "http://localhost:8080", "Базовый адрес результирующего сокращённого URL")
+	flag.Parse()
+
+	if *baseURLStr != "" {
+		parsedURL, err := url.ParseRequestURI(*baseURLStr)
+		if err != nil {
+			return err
+		}
+		cfg.BaseURL = *parsedURL
+	}
+
+	return nil
+}
+
+func loadEnvs(cfg *ServerConf) error {
+	err := env.Parse(cfg)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func InitConfig() (ServerConf, error) {
 	serverConf := ServerConf{}
-	parseFlags(&serverConf)
-	if isValidBaseURL := utils.IsValidURLString(serverConf.BaseURL); !isValidBaseURL {
-		return serverConf, errors.New("невалидный адрес результирующего сокращённого URL")
+
+	if err := loadFlags(&serverConf); err != nil {
+		return serverConf, err
 	}
+	if err := loadEnvs(&serverConf); err != nil {
+		return serverConf, err
+	}
+
 	return serverConf, nil
 }
