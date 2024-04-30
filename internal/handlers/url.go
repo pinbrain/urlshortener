@@ -53,7 +53,6 @@ func (h *URLHandler) HandleShortenURL(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-	// shortURL := h.baseURL + urlID
 	shortURL := h.baseURL.JoinPath(urlID).String()
 	w.WriteHeader(http.StatusCreated)
 	if _, err = w.Write([]byte(shortURL)); err != nil {

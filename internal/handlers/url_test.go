@@ -208,7 +208,6 @@ func TestURLHandler_HandleRedirect(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockStorage := new(mocks.MockURLStorage)
-			// handler, err := NewURLHandler(mockStorage, "http://localhost:8080/")
 			handler := NewURLHandler(mockStorage, url.URL{
 				Scheme: "http",
 				Host:   "localhost:8080",
