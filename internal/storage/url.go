@@ -7,12 +7,6 @@ import (
 	"github.com/pinbrain/urlshortener/internal/utils"
 )
 
-type URLStorage interface {
-	SaveURL(url string) (id string, err error)
-	GetURL(id string) (url string, err error)
-	IsValidID(id string) bool
-}
-
 const urlIDLength = 8
 
 type URLMapStore struct {

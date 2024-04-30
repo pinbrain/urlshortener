@@ -6,31 +6,25 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/pinbrain/urlshortener/internal/storage"
+	"github.com/go-chi/chi/v5"
 	"github.com/pinbrain/urlshortener/internal/utils"
 )
 
+type URLStorage interface {
+	SaveURL(url string) (id string, err error)
+	GetURL(id string) (url string, err error)
+	IsValidID(id string) bool
+}
+
 type URLHandler struct {
-	urlStore storage.URLStorage
+	urlStore URLStorage
 	baseURL  string
 }
 
-func NewURLHandler(urlStore storage.URLStorage, baseURL string) URLHandler {
+func NewURLHandler(urlStore URLStorage, baseURL string) URLHandler {
 	return URLHandler{
 		urlStore: urlStore,
 		baseURL:  baseURL,
-	}
-}
-
-func (h *URLHandler) HandleRequest(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		h.HandleRedirect(w, r)
-	case http.MethodPost:
-		h.HandleShortenURL(w, r)
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
 	}
 }
 
@@ -60,11 +54,13 @@ func (h *URLHandler) HandleShortenURL(w http.ResponseWriter, r *http.Request) {
 	}
 	shortURL := h.baseURL + urlID
 	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte(shortURL))
+	if _, err = w.Write([]byte(shortURL)); err != nil {
+		fmt.Println(err)
+	}
 }
 
 func (h *URLHandler) HandleRedirect(w http.ResponseWriter, r *http.Request) {
-	urlID := r.URL.Path[1:]
+	urlID := chi.URLParam(r, "urlID")
 	if !h.urlStore.IsValidID(urlID) {
 		http.Error(w, "Некорректная ссылка", http.StatusBadRequest)
 		return

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/pinbrain/urlshortener/internal/handlers"
 	"github.com/pinbrain/urlshortener/internal/storage"
 )
@@ -15,6 +16,17 @@ const (
 	urlHandlerPath = "/"
 )
 
+func urlRouter(urlHandler handlers.URLHandler) chi.Router {
+	r := chi.NewRouter()
+
+	r.Route("/", func(r chi.Router) {
+		r.Get("/{urlID}", urlHandler.HandleRedirect)
+		r.Post("/", urlHandler.HandleShortenURL)
+	})
+
+	return r
+}
+
 func Run() error {
 	baseURL := &url.URL{
 		Scheme: serverScheme,
@@ -24,7 +36,6 @@ func Run() error {
 
 	urlStore := storage.NewURLMapStore()
 	urlHandler := handlers.NewURLHandler(urlStore, baseURL.String())
-	mux := http.NewServeMux()
-	mux.HandleFunc(urlHandlerPath, urlHandler.HandleRequest)
-	return http.ListenAndServe(serverPort, mux)
+
+	return http.ListenAndServe(serverPort, urlRouter(urlHandler))
 }

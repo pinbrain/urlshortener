@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -8,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/pinbrain/urlshortener/internal/handlers/mocks"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -208,6 +209,10 @@ func TestURLHandler_HandleRedirect(t *testing.T) {
 			mockStorage.On("IsValidID", tt.request.urlID).Return(tt.urlStore.isValidID)
 
 			request := httptest.NewRequest(http.MethodGet, tt.request.reqURL, nil)
+			rctx := chi.NewRouteContext()
+			rctx.URLParams.Add("urlID", tt.request.urlID)
+			request = request.WithContext(context.WithValue(request.Context(), chi.RouteCtxKey, rctx))
+
 			w := httptest.NewRecorder()
 			handler.HandleRedirect(w, request)
 
@@ -215,76 +220,6 @@ func TestURLHandler_HandleRedirect(t *testing.T) {
 			defer res.Body.Close()
 			assert.Equal(t, tt.want.statusCode, res.StatusCode)
 			assert.Equal(t, tt.want.location, res.Header.Get("Location"))
-		})
-	}
-}
-
-func TestURLHandler_HandleRequest(t *testing.T) {
-	type want struct {
-		statusCode int
-	}
-	type request struct {
-		reqURL      string
-		method      string
-		body        string
-		contentType string
-	}
-	tests := []struct {
-		name    string
-		request request
-		want    want
-	}{
-		{
-			name: "Успешное сокращение ссылки",
-			request: request{
-				reqURL:      "http://localhost:8080/",
-				method:      http.MethodPost,
-				body:        "http://some.host.ru",
-				contentType: "text/plain",
-			},
-			want: want{
-				statusCode: http.StatusCreated,
-			},
-		},
-		{
-			name: "Успешный редирект",
-			request: request{
-				reqURL: "http://localhost:8080/",
-				method: http.MethodGet,
-			},
-			want: want{
-				statusCode: http.StatusTemporaryRedirect,
-			},
-		},
-		{
-			name: "Неподдерживаемый запрос",
-			request: request{
-				reqURL: "http://localhost:8080/",
-				method: http.MethodDelete,
-			},
-			want: want{
-				statusCode: http.StatusMethodNotAllowed,
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mockStorage := new(mocks.MockURLStorage)
-			handler := NewURLHandler(mockStorage, "http://localhost:8080/")
-			mockStorage.On("SaveURL", mock.Anything).Return("urlID", nil)
-			mockStorage.On("GetURL", mock.Anything).Return("url", nil)
-			mockStorage.On("IsValidID", mock.Anything).Return(true)
-
-			reqBody := strings.NewReader(tt.request.body)
-			request := httptest.NewRequest(tt.request.method, tt.request.reqURL, reqBody)
-			request.Header.Set("Content-Type", tt.request.contentType)
-			w := httptest.NewRecorder()
-			handler.HandleRequest(w, request)
-
-			res := w.Result()
-			defer res.Body.Close()
-			assert.Equal(t, tt.want.statusCode, res.StatusCode)
 		})
 	}
 }
