@@ -28,7 +28,10 @@ func Run() error {
 	}
 
 	urlStore := storage.NewURLMapStore()
-	urlHandler := handlers.NewURLHandler(urlStore, serverConf.BaseURL)
+	urlHandler, err := handlers.NewURLHandler(urlStore, serverConf.BaseURL)
+	if err != nil {
+		return err
+	}
 
 	fmt.Println("Running server on", serverConf.RunAddress)
 	return http.ListenAndServe(serverConf.RunAddress, urlRouter(urlHandler))

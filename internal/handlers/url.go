@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -18,17 +19,19 @@ type URLStorage interface {
 
 type URLHandler struct {
 	urlStore URLStorage
-	baseURL  string
+	baseURL  *url.URL
 }
 
-func NewURLHandler(urlStore URLStorage, baseURL string) URLHandler {
-	if baseURL[len(baseURL)-1:] != "/" {
-		baseURL += "/"
-	}
-	return URLHandler{
+func NewURLHandler(urlStore URLStorage, baseURLStr string) (URLHandler, error) {
+	urlHandler := URLHandler{
 		urlStore: urlStore,
-		baseURL:  baseURL,
 	}
+	baseURL, err := url.Parse(baseURLStr)
+	if err != nil {
+		return urlHandler, err
+	}
+	urlHandler.baseURL = baseURL
+	return urlHandler, nil
 }
 
 func (h *URLHandler) HandleShortenURL(w http.ResponseWriter, r *http.Request) {
@@ -55,7 +58,8 @@ func (h *URLHandler) HandleShortenURL(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-	shortURL := h.baseURL + urlID
+	// shortURL := h.baseURL + urlID
+	shortURL := h.baseURL.JoinPath(urlID).String()
 	w.WriteHeader(http.StatusCreated)
 	if _, err = w.Write([]byte(shortURL)); err != nil {
 		fmt.Println(err)

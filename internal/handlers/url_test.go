@@ -98,7 +98,9 @@ func TestURLHandler_HandleShortenURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockStorage := new(mocks.MockURLStorage)
-			handler := NewURLHandler(mockStorage, tt.baseURL)
+			handler, err := NewURLHandler(mockStorage, tt.baseURL)
+			require.NoError(t, err)
+
 			mockStorage.On("SaveURL", tt.request.url).Return(tt.urlStore.urlID, tt.urlStore.urlStoreError)
 
 			reqBody := strings.NewReader(tt.request.url)
@@ -114,8 +116,8 @@ func TestURLHandler_HandleShortenURL(t *testing.T) {
 
 			if tt.want.resBody != "" {
 				defer res.Body.Close()
-				resBody, err := io.ReadAll(res.Body)
-				require.NoError(t, err)
+				resBody, readErr := io.ReadAll(res.Body)
+				require.NoError(t, readErr)
 				assert.Equal(t, tt.want.resBody, string(resBody))
 			}
 		})
@@ -204,7 +206,9 @@ func TestURLHandler_HandleRedirect(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockStorage := new(mocks.MockURLStorage)
-			handler := NewURLHandler(mockStorage, "http://localhost:8080/")
+			handler, err := NewURLHandler(mockStorage, "http://localhost:8080/")
+			require.NoError(t, err)
+
 			mockStorage.On("GetURL", tt.request.urlID).Return(tt.urlStore.url, tt.urlStore.urlStoreError)
 			mockStorage.On("IsValidID", tt.request.urlID).Return(tt.urlStore.isValidID)
 
