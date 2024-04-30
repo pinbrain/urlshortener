@@ -22,6 +22,9 @@ type URLHandler struct {
 }
 
 func NewURLHandler(urlStore URLStorage, baseURL string) URLHandler {
+	if baseURL[len(baseURL)-1:] != "/" {
+		baseURL += "/"
+	}
 	return URLHandler{
 		urlStore: urlStore,
 		baseURL:  baseURL,

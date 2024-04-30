@@ -1,19 +1,13 @@
 package app
 
 import (
+	"fmt"
 	"net/http"
-	"net/url"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/pinbrain/urlshortener/internal/config"
 	"github.com/pinbrain/urlshortener/internal/handlers"
 	"github.com/pinbrain/urlshortener/internal/storage"
-)
-
-const (
-	serverScheme   = "http"
-	serverHost     = "localhost"
-	serverPort     = ":8080"
-	urlHandlerPath = "/"
 )
 
 func urlRouter(urlHandler handlers.URLHandler) chi.Router {
@@ -28,14 +22,14 @@ func urlRouter(urlHandler handlers.URLHandler) chi.Router {
 }
 
 func Run() error {
-	baseURL := &url.URL{
-		Scheme: serverScheme,
-		Host:   serverHost + serverPort,
-		Path:   urlHandlerPath,
+	serverConf, err := config.InitConfig()
+	if err != nil {
+		return err
 	}
 
 	urlStore := storage.NewURLMapStore()
-	urlHandler := handlers.NewURLHandler(urlStore, baseURL.String())
+	urlHandler := handlers.NewURLHandler(urlStore, serverConf.BaseURL)
 
-	return http.ListenAndServe(serverPort, urlRouter(urlHandler))
+	fmt.Println("Running server on", serverConf.RunAddress)
+	return http.ListenAndServe(serverConf.RunAddress, urlRouter(urlHandler))
 }
