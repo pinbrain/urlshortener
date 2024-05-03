@@ -1,8 +1,10 @@
 package storage
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
+	"sync"
 
 	"github.com/pinbrain/urlshortener/internal/utils"
 )
@@ -10,25 +12,29 @@ import (
 const urlIDLength = 8
 
 type URLMapStore struct {
-	store map[string]string
+	store sync.Map
 }
 
 func NewURLMapStore() *URLMapStore {
 	return &URLMapStore{
-		store: make(map[string]string),
+		store: sync.Map{},
 	}
 }
 
 func (s *URLMapStore) SaveURL(url string) (string, error) {
 	id := utils.NewRandomString(urlIDLength)
-	s.store[id] = url
+	s.store.Store(id, url)
 	return id, nil
 }
 
 func (s *URLMapStore) GetURL(id string) (string, error) {
-	url, ok := s.store[id]
+	storeValue, ok := s.store.Load(id)
 	if !ok {
 		return "", nil
+	}
+	url, ok := storeValue.(string)
+	if !ok {
+		return "", errors.New("wrong data type in url store")
 	}
 	return url, nil
 }
