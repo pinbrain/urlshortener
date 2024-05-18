@@ -10,10 +10,12 @@ import (
 type ServerConf struct {
 	ServerAddress string  `env:"SERVER_ADDRESS"`
 	BaseURL       url.URL `env:"BASE_URL"`
+	LogLevel      string  `env:"LOG_LEVEL"`
 }
 
 func loadFlags(cfg *ServerConf) error {
 	flag.StringVar(&cfg.ServerAddress, "a", ":8080", "Адрес запуска HTTP-сервера")
+	flag.StringVar(&cfg.LogLevel, "l", "info", "Уровень логирования")
 	baseURLStr := flag.String("b", "http://localhost:8080", "Базовый адрес результирующего сокращённого URL")
 	flag.Parse()
 
