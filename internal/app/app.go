@@ -18,6 +18,9 @@ func urlRouter(urlHandler handlers.URLHandler) chi.Router {
 		r.Get("/{urlID}", urlHandler.HandleRedirect)
 		r.Post("/", urlHandler.HandleShortenURL)
 	})
+	r.Route("/api", func(r chi.Router) {
+		r.Post("/shorten", urlHandler.HandleJSONShortenURL)
+	})
 
 	return r
 }

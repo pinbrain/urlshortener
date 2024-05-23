@@ -1,13 +1,14 @@
 package handlers
 
 import (
-	"fmt"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/pinbrain/urlshortener/internal/logger"
 	"github.com/pinbrain/urlshortener/internal/utils"
 )
 
@@ -20,6 +21,14 @@ type URLStorage interface {
 type URLHandler struct {
 	urlStore URLStorage
 	baseURL  *url.URL
+}
+
+type shortenRequest struct {
+	URL string `json:"url"`
+}
+
+type shortenResponse struct {
+	Result string `json:"result"`
 }
 
 func NewURLHandler(urlStore URLStorage, baseURL url.URL) URLHandler {
@@ -37,7 +46,7 @@ func (h *URLHandler) HandleShortenURL(w http.ResponseWriter, r *http.Request) {
 	}
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		fmt.Println(err)
+		logger.Log.Errorw("Error in reading request body", "err", err)
 		http.Error(w, "Не удалось прочитать ссылку в запросе", http.StatusInternalServerError)
 		return
 	}
@@ -49,14 +58,59 @@ func (h *URLHandler) HandleShortenURL(w http.ResponseWriter, r *http.Request) {
 	}
 	urlID, err := h.urlStore.SaveURL(url)
 	if err != nil {
-		fmt.Println(err)
+		logger.Log.Errorw("Error while saving url for shorten", "err", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	shortURL := h.baseURL.JoinPath(urlID).String()
 	w.WriteHeader(http.StatusCreated)
 	if _, err = w.Write([]byte(shortURL)); err != nil {
-		fmt.Println(err)
+		logger.Log.Errorw("Error sending response", "err", err)
+	}
+}
+
+func (h *URLHandler) HandleJSONShortenURL(w http.ResponseWriter, r *http.Request) {
+	contentType := r.Header.Get("Content-Type")
+	if !strings.Contains(contentType, "application/json") {
+		http.Error(w, "Invalid content type", http.StatusBadRequest)
+		return
+	}
+
+	var req shortenRequest
+	dec := json.NewDecoder(r.Body)
+	if err := dec.Decode(&req); err != nil {
+		logger.Log.Errorw("Error in decoding shorten request body", "err", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	if req.URL == "" {
+		http.Error(w, "Отсутствует ссылка для сокращения", http.StatusBadRequest)
+		return
+	}
+	isValidURL := utils.IsValidURLString(req.URL)
+	if !isValidURL {
+		http.Error(w, "Некорректная ссылка для сокращения", http.StatusBadRequest)
+		return
+	}
+	urlID, err := h.urlStore.SaveURL(req.URL)
+	if err != nil {
+		logger.Log.Errorw("Error while saving url for shorten", "err", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	shortURL := h.baseURL.JoinPath(urlID).String()
+
+	resp := shortenResponse{
+		Result: shortURL,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	enc := json.NewEncoder(w)
+	if err = enc.Encode(resp); err != nil {
+		logger.Log.Errorw("Error in encoding shorten response to json", "err", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
 	}
 }
 
@@ -68,7 +122,7 @@ func (h *URLHandler) HandleRedirect(w http.ResponseWriter, r *http.Request) {
 	}
 	url, err := h.urlStore.GetURL(urlID)
 	if err != nil {
-		fmt.Println(err)
+		logger.Log.Errorw("Error getting shorten url", "err", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
