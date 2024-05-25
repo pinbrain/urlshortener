@@ -14,7 +14,7 @@ import (
 
 func urlRouter(urlHandler handlers.URLHandler) chi.Router {
 	r := chi.NewRouter()
-	r.Use(logger.HTTPRequestLogger)
+	r.Use(middleware.HTTPRequestLogger)
 	r.Use(middleware.GzipMiddleware)
 
 	r.Route("/", func(r chi.Router) {
