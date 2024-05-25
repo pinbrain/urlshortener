@@ -7,12 +7,14 @@ import (
 	"github.com/pinbrain/urlshortener/internal/config"
 	"github.com/pinbrain/urlshortener/internal/handlers"
 	"github.com/pinbrain/urlshortener/internal/logger"
+	"github.com/pinbrain/urlshortener/internal/middleware"
 	"github.com/pinbrain/urlshortener/internal/storage"
 )
 
 func urlRouter(urlHandler handlers.URLHandler) chi.Router {
 	r := chi.NewRouter()
 	r.Use(logger.HTTPRequestLogger)
+	r.Use(middleware.GzipMiddleware)
 
 	r.Route("/", func(r chi.Router) {
 		r.Get("/{urlID}", urlHandler.HandleRedirect)

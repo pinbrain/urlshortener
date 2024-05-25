@@ -40,7 +40,7 @@ func NewURLHandler(urlStore URLStorage, baseURL url.URL) URLHandler {
 
 func (h *URLHandler) HandleShortenURL(w http.ResponseWriter, r *http.Request) {
 	contentType := r.Header.Get("Content-Type")
-	if !strings.Contains(contentType, "text/plain") {
+	if !strings.Contains(contentType, "text/plain") && !strings.Contains(contentType, "application/x-gzip") {
 		http.Error(w, "Invalid content type", http.StatusBadRequest)
 		return
 	}
