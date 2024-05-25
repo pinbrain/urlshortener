@@ -2,6 +2,7 @@ package app
 
 import (
 	"net/http"
+	"os"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/pinbrain/urlshortener/internal/config"
@@ -37,7 +38,19 @@ func Run() error {
 		return err
 	}
 
-	urlStore := storage.NewURLMapStore()
+	var jsonDBFile *os.File
+	if serverConf.StorageFile != "" {
+		jsonDBFile, err = os.OpenFile(serverConf.StorageFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+		if err != nil {
+			return err
+		}
+		defer jsonDBFile.Close()
+	}
+	urlStore, err := storage.NewURLMapStore(jsonDBFile)
+	if err != nil {
+		return err
+	}
+
 	urlHandler := handlers.NewURLHandler(urlStore, serverConf.BaseURL)
 
 	logger.Log.Infow("Starting server", "addr", serverConf.ServerAddress)

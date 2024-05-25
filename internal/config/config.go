@@ -1,8 +1,10 @@
 package config
 
 import (
+	"errors"
 	"flag"
 	"net/url"
+	"path/filepath"
 
 	"github.com/caarlos0/env/v11"
 )
@@ -11,21 +13,46 @@ type ServerConf struct {
 	ServerAddress string  `env:"SERVER_ADDRESS"`
 	BaseURL       url.URL `env:"BASE_URL"`
 	LogLevel      string  `env:"LOG_LEVEL"`
+	StorageFile   string  `env:"FILE_STORAGE_PATH"`
+}
+
+func validateBaseURL(baseURL string) (*url.URL, error) {
+	parsedURL, err := url.ParseRequestURI(baseURL)
+	if err != nil {
+		return nil, err
+	}
+	return parsedURL, nil
+}
+
+func validateStorageFileName(file string) error {
+	if file == "" {
+		return nil
+	}
+	if !filepath.IsAbs(file) && !filepath.IsLocal(file) {
+		return errors.New("невалидное полное имя файла с данными")
+	}
+	return nil
 }
 
 func loadFlags(cfg *ServerConf) error {
 	flag.StringVar(&cfg.ServerAddress, "a", ":8080", "Адрес запуска HTTP-сервера")
 	flag.StringVar(&cfg.LogLevel, "l", "info", "Уровень логирования")
+	storageFileStr := flag.String("f", "/tmp/short-url-db.json", "Полное имя файла, куда сохраняются данные")
 	baseURLStr := flag.String("b", "http://localhost:8080", "Базовый адрес результирующего сокращённого URL")
 	flag.Parse()
 
 	if *baseURLStr != "" {
-		parsedURL, err := url.ParseRequestURI(*baseURLStr)
+		parsedURL, err := validateBaseURL(*baseURLStr)
 		if err != nil {
 			return err
 		}
 		cfg.BaseURL = *parsedURL
 	}
+
+	if err := validateStorageFileName(*storageFileStr); err != nil {
+		return err
+	}
+	cfg.StorageFile = *storageFileStr
 
 	return nil
 }
@@ -35,6 +62,11 @@ func loadEnvs(cfg *ServerConf) error {
 	if err != nil {
 		return err
 	}
+
+	if err = validateStorageFileName(cfg.StorageFile); err != nil {
+		return err
+	}
+
 	return nil
 }
 
