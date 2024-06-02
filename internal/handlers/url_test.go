@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -125,6 +127,121 @@ func TestURLHandler_HandleShortenURL(t *testing.T) {
 		})
 	}
 }
+
+func TestURLHandler_HandleJSONShortenURL(t *testing.T) {
+	type want struct {
+		statusCode int
+		resBody    string
+	}
+	type request struct {
+		url         string
+		contentType string
+	}
+	type urlStore struct {
+		urlID         string
+		urlStoreError error
+	}
+	tests := []struct {
+		name     string
+		baseURL  string
+		want     want
+		request  request
+		urlStore urlStore
+	}{
+		{
+			name:    "Успешный запрос",
+			baseURL: "http://localhost:8080/",
+			request: request{
+				url:         "http://some.host.ru",
+				contentType: "application/json",
+			},
+			urlStore: urlStore{
+				urlID:         "AbCd1234",
+				urlStoreError: nil,
+			},
+			want: want{
+				statusCode: http.StatusCreated,
+				resBody:    `{"result":"http://localhost:8080/AbCd1234"}`,
+			},
+		},
+		{
+			name:    "Некорректный тип передаваемых данных",
+			baseURL: "http://localhost:8080/",
+			request: request{
+				url:         "http://some.host.ru",
+				contentType: "text/plain",
+			},
+			urlStore: urlStore{
+				urlStoreError: nil,
+			},
+			want: want{
+				statusCode: http.StatusBadRequest,
+			},
+		},
+		{
+			name:    "Некорректная ссылка для сокращения",
+			baseURL: "http://localhost:8080/",
+			request: request{
+				url:         "some random text",
+				contentType: "application/json",
+			},
+			urlStore: urlStore{
+				urlStoreError: nil,
+			},
+			want: want{
+				statusCode: http.StatusBadRequest,
+			},
+		},
+		{
+			name:    "Ошибка сохранения записи (ошибка store)",
+			baseURL: "http://localhost:8080/",
+			request: request{
+				url:         "http://some.host.ru",
+				contentType: "application/json",
+			},
+			urlStore: urlStore{
+				urlStoreError: errors.New("URL store error"),
+			},
+			want: want{
+				statusCode: http.StatusInternalServerError,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockStorage := new(mocks.MockURLStorage)
+			baseURL, err := url.Parse(tt.baseURL)
+			require.NoError(t, err)
+			handler := NewURLHandler(mockStorage, *baseURL)
+
+			mockStorage.On("SaveURL", tt.request.url).Return(tt.urlStore.urlID, tt.urlStore.urlStoreError)
+
+			req := shortenRequest{
+				URL: tt.request.url,
+			}
+			reqJSON, err := json.Marshal(req)
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "/", bytes.NewBuffer(reqJSON))
+			request.Header.Set("Content-Type", tt.request.contentType)
+
+			w := httptest.NewRecorder()
+
+			handler.HandleJSONShortenURL(w, request)
+
+			res := w.Result()
+			assert.Equal(t, tt.want.statusCode, res.StatusCode)
+
+			if tt.want.resBody != "" {
+				defer res.Body.Close()
+				resBody, readErr := io.ReadAll(res.Body)
+				require.NoError(t, readErr)
+				assert.JSONEq(t, tt.want.resBody, string(resBody))
+			}
+		})
+	}
+}
+
 func TestURLHandler_HandleRedirect(t *testing.T) {
 	type want struct {
 		statusCode int
