@@ -9,17 +9,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/pinbrain/urlshortener/internal/logger"
+	"github.com/pinbrain/urlshortener/internal/storage"
 	"github.com/pinbrain/urlshortener/internal/utils"
 )
 
-type URLStorage interface {
-	SaveURL(url string) (id string, err error)
-	GetURL(id string) (url string, err error)
-	IsValidID(id string) bool
-}
-
 type URLHandler struct {
-	urlStore URLStorage
+	urlStore storage.URLStorage
 	baseURL  *url.URL
 }
 
@@ -31,7 +26,7 @@ type shortenResponse struct {
 	Result string `json:"result"`
 }
 
-func NewURLHandler(urlStore URLStorage, baseURL url.URL) URLHandler {
+func NewURLHandler(urlStore storage.URLStorage, baseURL url.URL) URLHandler {
 	return URLHandler{
 		urlStore: urlStore,
 		baseURL:  &baseURL,
@@ -56,7 +51,7 @@ func (h *URLHandler) HandleShortenURL(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Некорректная ссылка для сокращения", http.StatusBadRequest)
 		return
 	}
-	urlID, err := h.urlStore.SaveURL(url)
+	urlID, err := h.urlStore.SaveURL(r.Context(), url)
 	if err != nil {
 		logger.Log.Errorw("Error while saving url for shorten", "err", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -93,7 +88,7 @@ func (h *URLHandler) HandleJSONShortenURL(w http.ResponseWriter, r *http.Request
 		http.Error(w, "Некорректная ссылка для сокращения", http.StatusBadRequest)
 		return
 	}
-	urlID, err := h.urlStore.SaveURL(req.URL)
+	urlID, err := h.urlStore.SaveURL(r.Context(), req.URL)
 	if err != nil {
 		logger.Log.Errorw("Error while saving url for shorten", "err", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -120,7 +115,7 @@ func (h *URLHandler) HandleRedirect(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Некорректная ссылка", http.StatusBadRequest)
 		return
 	}
-	url, err := h.urlStore.GetURL(urlID)
+	url, err := h.urlStore.GetURL(r.Context(), urlID)
 	if err != nil {
 		logger.Log.Errorw("Error getting shorten url", "err", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -131,4 +126,11 @@ func (h *URLHandler) HandleRedirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
+}
+
+func (h *URLHandler) HandlePing(w http.ResponseWriter, r *http.Request) {
+	if err := h.urlStore.Ping(r.Context()); err != nil {
+		logger.Log.Errorw("Error trying to ping db", "err", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
 }
