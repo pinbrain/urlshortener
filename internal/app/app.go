@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"net/http"
 	"os"
 
@@ -12,12 +13,21 @@ import (
 	"github.com/pinbrain/urlshortener/internal/storage"
 )
 
-func urlRouter(urlHandler handlers.URLHandler) chi.Router {
+func urlRouter(urlHandler handlers.URLHandler, db *storage.URLPgStore) chi.Router {
 	r := chi.NewRouter()
 	r.Use(middleware.HTTPRequestLogger)
 	r.Use(middleware.GzipMiddleware)
 
 	r.Route("/", func(r chi.Router) {
+
+		if db != nil {
+			r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
+				if err := db.Ping(r.Context()); err != nil {
+					logger.Log.Errorw("Error trying to ping db", "err", err)
+					http.Error(w, "Internal server error", http.StatusInternalServerError)
+				}
+			})
+		}
 		r.Get("/{urlID}", urlHandler.HandleRedirect)
 		r.Post("/", urlHandler.HandleShortenURL)
 	})
@@ -29,6 +39,7 @@ func urlRouter(urlHandler handlers.URLHandler) chi.Router {
 }
 
 func Run() error {
+	ctx := context.Background()
 	serverConf, err := config.InitConfig()
 	if err != nil {
 		return err
@@ -51,8 +62,16 @@ func Run() error {
 		return err
 	}
 
+	var db *storage.URLPgStore
+	if serverConf.DSN != "" {
+		db, err = storage.NewPgDB(ctx, storage.PgConfig{DSN: serverConf.DSN})
+		if err != nil {
+			return err
+		}
+	}
+
 	urlHandler := handlers.NewURLHandler(urlStore, serverConf.BaseURL)
 
 	logger.Log.Infow("Starting server", "addr", serverConf.ServerAddress)
-	return http.ListenAndServe(serverConf.ServerAddress, urlRouter(urlHandler))
+	return http.ListenAndServe(serverConf.ServerAddress, urlRouter(urlHandler, db))
 }

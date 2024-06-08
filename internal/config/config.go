@@ -14,6 +14,7 @@ type ServerConf struct {
 	BaseURL       url.URL `env:"BASE_URL"`
 	LogLevel      string  `env:"LOG_LEVEL"`
 	StorageFile   string  `env:"FILE_STORAGE_PATH"`
+	DSN           string  `env:"DATABASE_DSN"`
 }
 
 func validateBaseURL(baseURL string) (*url.URL, error) {
@@ -37,6 +38,7 @@ func validateStorageFileName(file string) error {
 func loadFlags(cfg *ServerConf) error {
 	flag.StringVar(&cfg.ServerAddress, "a", ":8080", "Адрес запуска HTTP-сервера")
 	flag.StringVar(&cfg.LogLevel, "l", "info", "Уровень логирования")
+	flag.StringVar(&cfg.DSN, "d", "", "Строка с адресом подключения к БД")
 	storageFileStr := flag.String("f", "/tmp/short-url-db.json", "Полное имя файла, куда сохраняются данные")
 	baseURLStr := flag.String("b", "http://localhost:8080", "Базовый адрес результирующего сокращённого URL")
 	flag.Parse()
