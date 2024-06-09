@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -63,12 +64,16 @@ func (h *URLHandler) HandleShortenURL(w http.ResponseWriter, r *http.Request) {
 	}
 	urlID, err := h.urlStore.SaveURL(r.Context(), url)
 	if err != nil {
-		logger.Log.Errorw("Error while saving url for shorten", "err", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
+		if !errors.Is(err, storage.ErrConflict) {
+			logger.Log.Errorw("Error while saving url for shorten", "err", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusConflict)
+	} else {
+		w.WriteHeader(http.StatusCreated)
 	}
 	shortURL := h.baseURL.JoinPath(urlID).String()
-	w.WriteHeader(http.StatusCreated)
 	if _, err = w.Write([]byte(shortURL)); err != nil {
 		logger.Log.Errorw("Error sending response", "err", err)
 	}
@@ -99,18 +104,22 @@ func (h *URLHandler) HandleJSONShortenURL(w http.ResponseWriter, r *http.Request
 		return
 	}
 	urlID, err := h.urlStore.SaveURL(r.Context(), req.URL)
+	w.Header().Set("Content-Type", "application/json")
 	if err != nil {
-		logger.Log.Errorw("Error while saving url for shorten", "err", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
+		if !errors.Is(err, storage.ErrConflict) {
+			logger.Log.Errorw("Error while saving url for shorten", "err", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusConflict)
+	} else {
+		w.WriteHeader(http.StatusCreated)
 	}
 	shortURL := h.baseURL.JoinPath(urlID).String()
 
 	resp := shortenResponse{
 		Result: shortURL,
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
 	enc := json.NewEncoder(w)
 	if err = enc.Encode(resp); err != nil {
 		logger.Log.Errorw("Error in encoding shorten response to json", "err", err)
@@ -146,6 +155,10 @@ func (h *URLHandler) HandleShortenBatchURL(w http.ResponseWriter, r *http.Reques
 	}
 	err := h.urlStore.SaveBatchURL(r.Context(), shortenURLs)
 	if err != nil {
+		if errors.Is(err, storage.ErrConflict) {
+			http.Error(w, "В запросе ссылки, которые уже были ранее сохранены", http.StatusConflict)
+			return
+		}
 		logger.Log.Errorw("Error in saving batch of urls in store", "err", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return

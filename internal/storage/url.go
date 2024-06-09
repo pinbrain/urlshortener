@@ -2,9 +2,13 @@ package storage
 
 import (
 	"context"
+	"errors"
 )
 
 const urlIDLength = 8
+
+// ErrConflict указывает на конфликт данных в хранилище.
+var ErrConflict = errors.New("data conflict")
 
 type URLStorage interface {
 	// Сохранить сокращенную ссылку

@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"regexp"
 
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pinbrain/urlshortener/internal/utils"
 )
@@ -50,7 +52,7 @@ func initPool(ctx context.Context, cfg PgConfig) (*pgxpool.Pool, error) {
 func initSchema(ctx context.Context, pool *pgxpool.Pool) error {
 	_, err := pool.Exec(ctx,
 		`CREATE TABLE IF NOT EXISTS shorten_urls (
-			original VARCHAR(65536) NOT NULL,
+			original VARCHAR(65536) NOT NULL UNIQUE,
 			shorten VARCHAR(256) NOT NULL
 		);`,
 	)
@@ -67,6 +69,17 @@ func (db *URLPgStore) SaveURL(ctx context.Context, url string) (string, error) {
 		url, id,
 	)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+			row := db.pool.QueryRow(ctx,
+				`SELECT shorten FROM shorten_urls WHERE original = $1`,
+				url,
+			)
+			if err = row.Scan(&id); err != nil {
+				return "", fmt.Errorf("failed to select existing url from db after unique conflict: %w", err)
+			}
+			return id, ErrConflict
+		}
 		return "", fmt.Errorf("failed to insert record to db: %w", err)
 	}
 	return id, nil
@@ -86,6 +99,10 @@ func (db *URLPgStore) SaveBatchURL(ctx context.Context, urls []ShortenURL) error
 	}
 	err := db.pool.SendBatch(ctx, batch).Close()
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+			return ErrConflict
+		}
 		return fmt.Errorf("failed to save batch of urls: %w", err)
 	}
 
