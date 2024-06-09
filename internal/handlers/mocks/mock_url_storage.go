@@ -3,6 +3,7 @@ package mocks
 import (
 	"context"
 
+	"github.com/pinbrain/urlshortener/internal/storage"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -30,5 +31,9 @@ func (m *MockURLStorage) Close() error {
 }
 
 func (m *MockURLStorage) Ping(_ context.Context) error {
+	return nil
+}
+
+func (m *MockURLStorage) SaveBatchURL(_ context.Context, _ []storage.ShortenURL) error {
 	return nil
 }

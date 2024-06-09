@@ -72,6 +72,26 @@ func (db *URLPgStore) SaveURL(ctx context.Context, url string) (string, error) {
 	return id, nil
 }
 
+func (db *URLPgStore) SaveBatchURL(ctx context.Context, urls []ShortenURL) error {
+	batch := &pgx.Batch{}
+	stmt := "INSERT INTO shorten_urls(original, shorten) VALUES(@original, @shorten);"
+	for i, url := range urls {
+		id := utils.NewRandomString(urlIDLength)
+		urls[i].Shorten = id
+		args := pgx.NamedArgs{
+			"original": url.Original,
+			"shorten":  id,
+		}
+		batch.Queue(stmt, args)
+	}
+	err := db.pool.SendBatch(ctx, batch).Close()
+	if err != nil {
+		return fmt.Errorf("failed to save batch of urls: %w", err)
+	}
+
+	return nil
+}
+
 func (db *URLPgStore) GetURL(ctx context.Context, id string) (string, error) {
 	row := db.pool.QueryRow(ctx,
 		`SELECT original FROM shorten_urls WHERE shorten = $1`,

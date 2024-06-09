@@ -70,6 +70,17 @@ func (s *URLMapStore) SaveURL(_ context.Context, url string) (string, error) {
 	return id, nil
 }
 
+func (s *URLMapStore) SaveBatchURL(ctx context.Context, urls []ShortenURL) error {
+	for i, url := range urls {
+		urlID, err := s.SaveURL(ctx, url.Original)
+		if err != nil {
+			return fmt.Errorf("failed to save batch of urls: %w", err)
+		}
+		urls[i].Shorten = urlID
+	}
+	return nil
+}
+
 func (s *URLMapStore) GetURL(_ context.Context, id string) (string, error) {
 	storeValue, ok := s.store.Load(id)
 	if !ok {

@@ -24,6 +24,7 @@ func urlRouter(urlHandler handlers.URLHandler) chi.Router {
 	})
 	r.Route("/api", func(r chi.Router) {
 		r.Post("/shorten", urlHandler.HandleJSONShortenURL)
+		r.Post("/shorten/batch", urlHandler.HandleShortenBatchURL)
 	})
 
 	return r

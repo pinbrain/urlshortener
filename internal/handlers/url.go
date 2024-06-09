@@ -26,6 +26,16 @@ type shortenResponse struct {
 	Result string `json:"result"`
 }
 
+type batchShortenRequest struct {
+	CorrelationID string `json:"correlation_id"`
+	OriginalURL   string `json:"original_url"`
+}
+
+type batchShortenResponse struct {
+	CorrelationID string `json:"correlation_id"`
+	ShortURL      string `json:"short_url"`
+}
+
 func NewURLHandler(urlStore storage.URLStorage, baseURL url.URL) URLHandler {
 	return URLHandler{
 		urlStore: urlStore,
@@ -99,6 +109,57 @@ func (h *URLHandler) HandleJSONShortenURL(w http.ResponseWriter, r *http.Request
 	resp := shortenResponse{
 		Result: shortURL,
 	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	enc := json.NewEncoder(w)
+	if err = enc.Encode(resp); err != nil {
+		logger.Log.Errorw("Error in encoding shorten response to json", "err", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+}
+
+func (h *URLHandler) HandleShortenBatchURL(w http.ResponseWriter, r *http.Request) {
+	contentType := r.Header.Get("Content-Type")
+	if !strings.Contains(contentType, "application/json") {
+		http.Error(w, "Invalid content type", http.StatusBadRequest)
+		return
+	}
+
+	var req []batchShortenRequest
+	dec := json.NewDecoder(r.Body)
+	if err := dec.Decode(&req); err != nil {
+		logger.Log.Errorw("Error in decoding shorten request body", "err", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	if len(req) == 0 {
+		http.Error(w, "Отсутствуют данные для сокращения", http.StatusBadRequest)
+		return
+	}
+
+	shortenURLs := []storage.ShortenURL{}
+	for _, reqURL := range req {
+		shortenURLs = append(shortenURLs, storage.ShortenURL{
+			Original: reqURL.OriginalURL,
+		})
+	}
+	err := h.urlStore.SaveBatchURL(r.Context(), shortenURLs)
+	if err != nil {
+		logger.Log.Errorw("Error in saving batch of urls in store", "err", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	resp := []batchShortenResponse{}
+	for i, url := range req {
+		result := batchShortenResponse{
+			CorrelationID: url.CorrelationID,
+			ShortURL:      h.baseURL.JoinPath(shortenURLs[i].Shorten).String(),
+		}
+		resp = append(resp, result)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	enc := json.NewEncoder(w)
