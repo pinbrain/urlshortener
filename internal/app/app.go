@@ -1,8 +1,8 @@
 package app
 
 import (
+	"context"
 	"net/http"
-	"os"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/pinbrain/urlshortener/internal/config"
@@ -18,17 +18,20 @@ func urlRouter(urlHandler handlers.URLHandler) chi.Router {
 	r.Use(middleware.GzipMiddleware)
 
 	r.Route("/", func(r chi.Router) {
+		r.Get("/ping", urlHandler.HandlePing)
 		r.Get("/{urlID}", urlHandler.HandleRedirect)
 		r.Post("/", urlHandler.HandleShortenURL)
 	})
 	r.Route("/api", func(r chi.Router) {
 		r.Post("/shorten", urlHandler.HandleJSONShortenURL)
+		r.Post("/shorten/batch", urlHandler.HandleShortenBatchURL)
 	})
 
 	return r
 }
 
 func Run() error {
+	ctx := context.Background()
 	serverConf, err := config.InitConfig()
 	if err != nil {
 		return err
@@ -38,18 +41,14 @@ func Run() error {
 		return err
 	}
 
-	var jsonDBFile *os.File
-	if serverConf.StorageFile != "" {
-		jsonDBFile, err = os.OpenFile(serverConf.StorageFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-		if err != nil {
-			return err
-		}
-		defer jsonDBFile.Close()
-	}
-	urlStore, err := storage.NewURLMapStore(jsonDBFile)
+	urlStore, err := storage.NewURLStorage(ctx, storage.URLStorageConfig{
+		StorageFile: serverConf.StorageFile,
+		DSN:         serverConf.DSN,
+	})
 	if err != nil {
 		return err
 	}
+	defer urlStore.Close()
 
 	urlHandler := handlers.NewURLHandler(urlStore, serverConf.BaseURL)
 
