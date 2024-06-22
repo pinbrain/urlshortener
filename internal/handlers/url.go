@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/pinbrain/urlshortener/internal/context"
 	"github.com/pinbrain/urlshortener/internal/logger"
 	"github.com/pinbrain/urlshortener/internal/storage"
 	"github.com/pinbrain/urlshortener/internal/utils"
@@ -37,6 +38,11 @@ type batchShortenResponse struct {
 	ShortURL      string `json:"short_url"`
 }
 
+type userURLResponse struct {
+	OriginalURL string `json:"original_url"`
+	ShortURL    string `json:"short_url"`
+}
+
 func NewURLHandler(urlStore storage.URLStorage, baseURL url.URL) URLHandler {
 	return URLHandler{
 		urlStore: urlStore,
@@ -62,7 +68,12 @@ func (h *URLHandler) HandleShortenURL(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Некорректная ссылка для сокращения", http.StatusBadRequest)
 		return
 	}
-	urlID, err := h.urlStore.SaveURL(r.Context(), url)
+	user := context.GetCtxUser(r.Context())
+	userID := 0
+	if user != nil {
+		userID = user.ID
+	}
+	urlID, err := h.urlStore.SaveURL(r.Context(), url, userID)
 	if err != nil {
 		if !errors.Is(err, storage.ErrConflict) {
 			logger.Log.Errorw("Error while saving url for shorten", "err", err)
@@ -103,7 +114,12 @@ func (h *URLHandler) HandleJSONShortenURL(w http.ResponseWriter, r *http.Request
 		http.Error(w, "Некорректная ссылка для сокращения", http.StatusBadRequest)
 		return
 	}
-	urlID, err := h.urlStore.SaveURL(r.Context(), req.URL)
+	user := context.GetCtxUser(r.Context())
+	userID := 0
+	if user != nil {
+		userID = user.ID
+	}
+	urlID, err := h.urlStore.SaveURL(r.Context(), req.URL, userID)
 	w.Header().Set("Content-Type", "application/json")
 	if err != nil {
 		if !errors.Is(err, storage.ErrConflict) {
@@ -123,8 +139,6 @@ func (h *URLHandler) HandleJSONShortenURL(w http.ResponseWriter, r *http.Request
 	enc := json.NewEncoder(w)
 	if err = enc.Encode(resp); err != nil {
 		logger.Log.Errorw("Error in encoding shorten response to json", "err", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
 	}
 }
 
@@ -153,7 +167,12 @@ func (h *URLHandler) HandleShortenBatchURL(w http.ResponseWriter, r *http.Reques
 			Original: reqURL.OriginalURL,
 		})
 	}
-	err := h.urlStore.SaveBatchURL(r.Context(), shortenURLs)
+	user := context.GetCtxUser(r.Context())
+	userID := 0
+	if user != nil {
+		userID = user.ID
+	}
+	err := h.urlStore.SaveBatchURL(r.Context(), shortenURLs, userID)
 	if err != nil {
 		if errors.Is(err, storage.ErrConflict) {
 			http.Error(w, "В запросе ссылки, которые уже были ранее сохранены", http.StatusConflict)
@@ -178,8 +197,34 @@ func (h *URLHandler) HandleShortenBatchURL(w http.ResponseWriter, r *http.Reques
 	enc := json.NewEncoder(w)
 	if err = enc.Encode(resp); err != nil {
 		logger.Log.Errorw("Error in encoding shorten response to json", "err", err)
+	}
+}
+
+func (h *URLHandler) HandleGetUsersURLs(w http.ResponseWriter, r *http.Request) {
+	user := context.GetCtxUser(r.Context())
+	userURLs, err := h.urlStore.GetUserURLs(r.Context(), user.ID)
+	if err != nil {
+		logger.Log.Errorw("Error in getting user shorten urls", "err", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
+	}
+	resp := []userURLResponse{}
+	for _, url := range userURLs {
+		result := userURLResponse{
+			OriginalURL: url.Original,
+			ShortURL:    h.baseURL.JoinPath(url.Shorten).String(),
+		}
+		resp = append(resp, result)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if len(resp) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	enc := json.NewEncoder(w)
+	if err = enc.Encode(resp); err != nil {
+		logger.Log.Errorw("Error in encoding user urls response to json", "err", err)
 	}
 }
 
