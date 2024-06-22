@@ -13,8 +13,11 @@ import (
 )
 
 type URLMapStore struct {
-	store  sync.Map
-	jsonDB jsonDB
+	store     map[string]string
+	userStore map[int][]string
+	userMaxID int
+	mutex     sync.RWMutex
+	jsonDB    jsonDB
 }
 
 type jsonDB struct {
@@ -26,11 +29,13 @@ type jsonDB struct {
 type URLMapFileRecord struct {
 	OriginalURL string `json:"original_url"`
 	ShortURL    string `json:"short_url"`
+	UserID      int    `json:"user_id"`
 }
 
 func NewURLMapStore(storageFile string) (*URLMapStore, error) {
 	urlMapStore := &URLMapStore{
-		store: sync.Map{},
+		store:     make(map[string]string),
+		userStore: make(map[int][]string),
 	}
 
 	if storageFile != "" {
@@ -52,27 +57,38 @@ func NewURLMapStore(storageFile string) (*URLMapStore, error) {
 				}
 				return nil, err
 			}
-			urlMapStore.store.Store(record.ShortURL, record.OriginalURL)
+			urlMapStore.store[record.ShortURL] = record.OriginalURL
+			userURLs := urlMapStore.userStore[record.UserID]
+			urlMapStore.userStore[record.UserID] = append(userURLs, record.ShortURL)
+			if urlMapStore.userMaxID < record.UserID {
+				urlMapStore.userMaxID = record.UserID
+			}
 		}
 	}
 
 	return urlMapStore, nil
 }
 
-func (s *URLMapStore) SaveURL(_ context.Context, url string) (string, error) {
+func (s *URLMapStore) SaveURL(_ context.Context, url string, userID int) (string, error) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	if userID > s.userMaxID {
+		s.userMaxID = userID
+	}
 	id := utils.NewRandomString(urlIDLength)
 	if s.jsonDB.file != nil {
-		if err := s.jsonDB.encoder.Encode(URLMapFileRecord{OriginalURL: url, ShortURL: id}); err != nil {
+		if err := s.jsonDB.encoder.Encode(URLMapFileRecord{OriginalURL: url, ShortURL: id, UserID: userID}); err != nil {
 			return "", err
 		}
 	}
-	s.store.Store(id, url)
+	s.store[id] = url
+	s.userStore[userID] = append(s.userStore[userID], id)
 	return id, nil
 }
 
-func (s *URLMapStore) SaveBatchURL(ctx context.Context, urls []ShortenURL) error {
+func (s *URLMapStore) SaveBatchURL(ctx context.Context, urls []ShortenURL, userID int) error {
 	for i, url := range urls {
-		urlID, err := s.SaveURL(ctx, url.Original)
+		urlID, err := s.SaveURL(ctx, url.Original, userID)
 		if err != nil {
 			return fmt.Errorf("failed to save batch of urls: %w", err)
 		}
@@ -82,13 +98,11 @@ func (s *URLMapStore) SaveBatchURL(ctx context.Context, urls []ShortenURL) error
 }
 
 func (s *URLMapStore) GetURL(_ context.Context, id string) (string, error) {
-	storeValue, ok := s.store.Load(id)
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	url, ok := s.store[id]
 	if !ok {
 		return "", nil
-	}
-	url, ok := storeValue.(string)
-	if !ok {
-		return "", errors.New("wrong data type in url store")
 	}
 	return url, nil
 }
@@ -97,6 +111,42 @@ func (s *URLMapStore) IsValidID(id string) bool {
 	regStr := fmt.Sprintf(`^[a-zA-Z0-9]{%d}$`, urlIDLength)
 	validIDReg := regexp.MustCompile(regStr)
 	return validIDReg.MatchString(id)
+}
+
+func (s *URLMapStore) CreateUser(_ context.Context) (*User, error) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	s.userMaxID++
+	return &User{ID: s.userMaxID}, nil
+}
+
+func (s *URLMapStore) GetUser(_ context.Context, id int) (*User, error) {
+	if id <= 0 {
+		return nil, errors.New("invalid user id")
+	}
+	_, ok := s.userStore[id]
+	if !ok {
+		return nil, ErrNoData
+	}
+	return &User{ID: id}, nil
+}
+
+func (s *URLMapStore) GetUserURLs(_ context.Context, userID int) ([]ShortenURL, error) {
+	if userID <= 0 {
+		return nil, errors.New("invalid user id")
+	}
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	var userURLs []ShortenURL
+	userStore := s.userStore[userID]
+	for _, url := range userStore {
+		userURLs = append(userURLs, ShortenURL{
+			Shorten:  url,
+			Original: s.store[url],
+		})
+	}
+	return userURLs, nil
 }
 
 func (s *URLMapStore) Ping(_ context.Context) error {

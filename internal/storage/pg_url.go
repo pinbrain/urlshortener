@@ -50,23 +50,46 @@ func initPool(ctx context.Context, cfg PgConfig) (*pgxpool.Pool, error) {
 }
 
 func initSchema(ctx context.Context, pool *pgxpool.Pool) error {
-	_, err := pool.Exec(ctx,
-		`CREATE TABLE IF NOT EXISTS shorten_urls (
-			original VARCHAR(65536) NOT NULL UNIQUE,
-			shorten VARCHAR(256) NOT NULL
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	_, err = tx.Exec(ctx,
+		`CREATE TABLE IF NOT EXISTS users (
+			id SERIAL PRIMARY KEY
 		);`,
 	)
 	if err != nil {
 		return err
 	}
-	return nil
+	_, err = tx.Exec(ctx,
+		`CREATE TABLE IF NOT EXISTS shorten_urls (
+			original VARCHAR(65536) NOT NULL UNIQUE,
+			shorten VARCHAR(256) NOT NULL,
+			user_id INT REFERENCES users (id)
+		);`,
+	)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
-func (db *URLPgStore) SaveURL(ctx context.Context, url string) (string, error) {
+func (db *URLPgStore) SaveURL(ctx context.Context, url string, userID int) (string, error) {
 	id := utils.NewRandomString(urlIDLength)
+
+	// оставляем возможность сохранять url неавторизованными пользователями
+	var userIDValue interface{}
+	if userID == 0 {
+		userIDValue = nil
+	} else {
+		userIDValue = userID
+	}
+
 	_, err := db.pool.Exec(ctx,
-		"INSERT INTO shorten_urls(original, shorten) VALUES($1, $2);",
-		url, id,
+		"INSERT INTO shorten_urls(original, shorten, user_id) VALUES($1, $2, $3);",
+		url, id, userIDValue,
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -85,15 +108,23 @@ func (db *URLPgStore) SaveURL(ctx context.Context, url string) (string, error) {
 	return id, nil
 }
 
-func (db *URLPgStore) SaveBatchURL(ctx context.Context, urls []ShortenURL) error {
+func (db *URLPgStore) SaveBatchURL(ctx context.Context, urls []ShortenURL, userID int) error {
+	// оставляем возможность сохранять url неавторизованными пользователями
+	var userIDValue interface{}
+	if userID == 0 {
+		userIDValue = nil
+	} else {
+		userIDValue = userID
+	}
 	batch := &pgx.Batch{}
-	stmt := "INSERT INTO shorten_urls(original, shorten) VALUES(@original, @shorten);"
+	stmt := "INSERT INTO shorten_urls(original, shorten, user_id) VALUES(@original, @shorten, @user_id);"
 	for i, url := range urls {
 		id := utils.NewRandomString(urlIDLength)
 		urls[i].Shorten = id
 		args := pgx.NamedArgs{
 			"original": url.Original,
 			"shorten":  id,
+			"user_id":  userIDValue,
 		}
 		batch.Queue(stmt, args)
 	}
@@ -123,6 +154,60 @@ func (db *URLPgStore) GetURL(ctx context.Context, id string) (string, error) {
 		return "", fmt.Errorf("failed to select url from db: %w", err)
 	}
 	return url, nil
+}
+
+func (db *URLPgStore) CreateUser(ctx context.Context) (*User, error) {
+	row := db.pool.QueryRow(ctx, "INSERT INTO users DEFAULT VALUES RETURNING id")
+	var user User
+	if err := row.Scan(&user.ID); err != nil {
+		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+	return &user, nil
+}
+
+func (db *URLPgStore) GetUser(ctx context.Context, id int) (*User, error) {
+	if id <= 0 {
+		return nil, errors.New("invalid user id")
+	}
+	row := db.pool.QueryRow(ctx,
+		`SELECT id FROM users WHERE id = $1`,
+		id,
+	)
+	var user User
+	if err := row.Scan(&user.ID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNoData
+		}
+		return nil, fmt.Errorf("failed to select user from db: %w", err)
+	}
+	return &user, nil
+}
+
+func (db *URLPgStore) GetUserURLs(ctx context.Context, userID int) ([]ShortenURL, error) {
+	if userID <= 0 {
+		return nil, errors.New("invalid user id")
+	}
+	rows, err := db.pool.Query(ctx,
+		`SELECT original, shorten FROM shorten_urls WHERE user_id = $1`,
+		userID,
+	)
+	var userURLs []ShortenURL
+	if err != nil {
+		return nil, fmt.Errorf("failed to select user urls from db: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var shortenURL ShortenURL
+		if err = rows.Scan(&shortenURL.Original, &shortenURL.Shorten); err != nil {
+			return nil, fmt.Errorf("failed to read data from db url row: %w", err)
+		}
+		userURLs = append(userURLs, shortenURL)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to select user urls from db: %w", err)
+	}
+	return userURLs, nil
 }
 
 func (db *URLPgStore) IsValidID(id string) bool {

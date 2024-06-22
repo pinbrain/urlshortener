@@ -12,10 +12,13 @@ import (
 	"github.com/pinbrain/urlshortener/internal/storage"
 )
 
-func urlRouter(urlHandler handlers.URLHandler) chi.Router {
+func urlRouter(urlHandler handlers.URLHandler, urlStore storage.URLStorage) chi.Router {
 	r := chi.NewRouter()
 	r.Use(middleware.HTTPRequestLogger)
 	r.Use(middleware.GzipMiddleware)
+
+	amw := middleware.NewAuthMiddleware(urlStore)
+	r.Use(amw.AuthenticateUser)
 
 	r.Route("/", func(r chi.Router) {
 		r.Get("/ping", urlHandler.HandlePing)
@@ -25,6 +28,11 @@ func urlRouter(urlHandler handlers.URLHandler) chi.Router {
 	r.Route("/api", func(r chi.Router) {
 		r.Post("/shorten", urlHandler.HandleJSONShortenURL)
 		r.Post("/shorten/batch", urlHandler.HandleShortenBatchURL)
+
+		r.Route("/user", func(r chi.Router) {
+			r.Use(amw.RequireUser)
+			r.Get("/urls", urlHandler.HandleGetUsersURLs)
+		})
 	})
 
 	return r
@@ -53,5 +61,5 @@ func Run() error {
 	urlHandler := handlers.NewURLHandler(urlStore, serverConf.BaseURL)
 
 	logger.Log.Infow("Starting server", "addr", serverConf.ServerAddress)
-	return http.ListenAndServe(serverConf.ServerAddress, urlRouter(urlHandler))
+	return http.ListenAndServe(serverConf.ServerAddress, urlRouter(urlHandler, urlStore))
 }
