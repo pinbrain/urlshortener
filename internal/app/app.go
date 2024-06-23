@@ -32,6 +32,7 @@ func urlRouter(urlHandler handlers.URLHandler, urlStore storage.URLStorage) chi.
 		r.Route("/user", func(r chi.Router) {
 			r.Use(amw.RequireUser)
 			r.Get("/urls", urlHandler.HandleGetUsersURLs)
+			r.Delete("/urls", urlHandler.HandleDeleteUserURLs)
 		})
 	})
 

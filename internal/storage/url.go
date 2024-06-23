@@ -13,6 +13,12 @@ var ErrConflict = errors.New("data conflict")
 // ErrNoData указывает на отсутствие данных в хранилище.
 var ErrNoData = errors.New("no data")
 
+// ErrIsDeleted указывает на то, что ссылка была удалена.
+var ErrIsDeleted = errors.New("deleted")
+
+// ErrNotImplemented указывает на то, что метод не реализован.
+var ErrNotImplemented = errors.New("not implemented")
+
 type URLStorage interface {
 	// Сохранить сокращенную ссылку
 	SaveURL(ctx context.Context, url string, userID int) (id string, err error)
@@ -26,6 +32,8 @@ type URLStorage interface {
 	GetUser(ctx context.Context, id int) (*User, error)
 	// Получить все сокращенные пользователем ссылки
 	GetUserURLs(ctx context.Context, id int) (urls []ShortenURL, err error)
+	// Удалить сокращенные ссылки пользователя
+	DeleteUserURLs(ctx context.Context, userID int, urls []string) error
 	// Проверить валидность сокращенной ссылки (проверка формата)
 	IsValidID(id string) bool
 	// Проверка связи с БД (для всех остальных хранилищ ничего не делает)

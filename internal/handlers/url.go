@@ -228,6 +228,37 @@ func (h *URLHandler) HandleGetUsersURLs(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+func (h *URLHandler) HandleDeleteUserURLs(w http.ResponseWriter, r *http.Request) {
+	user := context.GetCtxUser(r.Context())
+	contentType := r.Header.Get("Content-Type")
+	if !strings.Contains(contentType, "application/json") {
+		http.Error(w, "Invalid content type", http.StatusBadRequest)
+		return
+	}
+
+	var req []string
+	dec := json.NewDecoder(r.Body)
+	if err := dec.Decode(&req); err != nil {
+		logger.Log.Errorw("Error in decoding request body", "err", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	if len(req) == 0 {
+		http.Error(w, "Отсутствуют данные для удаления", http.StatusBadRequest)
+		return
+	}
+	if err := h.urlStore.DeleteUserURLs(r.Context(), user.ID, req); err != nil {
+		if errors.Is(err, storage.ErrNotImplemented) {
+			w.WriteHeader(http.StatusNotImplemented)
+			return
+		}
+		logger.Log.Errorw("Error in deleting user urls", "err", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
 func (h *URLHandler) HandleRedirect(w http.ResponseWriter, r *http.Request) {
 	urlID := chi.URLParam(r, "urlID")
 	if !h.urlStore.IsValidID(urlID) {
@@ -236,6 +267,10 @@ func (h *URLHandler) HandleRedirect(w http.ResponseWriter, r *http.Request) {
 	}
 	url, err := h.urlStore.GetURL(r.Context(), urlID)
 	if err != nil {
+		if errors.Is(err, storage.ErrIsDeleted) {
+			w.WriteHeader(http.StatusGone)
+			return
+		}
 		logger.Log.Errorw("Error getting shorten url", "err", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return

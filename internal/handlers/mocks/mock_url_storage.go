@@ -49,3 +49,7 @@ func (m *MockURLStorage) Ping(_ context.Context) error {
 func (m *MockURLStorage) SaveBatchURL(_ context.Context, _ []storage.ShortenURL, _ int) error {
 	return nil
 }
+
+func (m *MockURLStorage) DeleteUserURLs(_ context.Context, _ int, _ []string) error {
+	return nil
+}

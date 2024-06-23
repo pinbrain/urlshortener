@@ -149,6 +149,11 @@ func (s *URLMapStore) GetUserURLs(_ context.Context, userID int) ([]ShortenURL, 
 	return userURLs, nil
 }
 
+// TODO: возможно реализовать в будущем
+func (s *URLMapStore) DeleteUserURLs(_ context.Context, _ int, _ []string) error {
+	return ErrNotImplemented
+}
+
 func (s *URLMapStore) Ping(_ context.Context) error {
 	return nil
 }
