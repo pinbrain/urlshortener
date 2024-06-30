@@ -107,17 +107,18 @@ func (db *URLPgStore) flushDelURLs(ctx context.Context) {
 			if !ok {
 				if len(batch) > 0 {
 					db.executeDelBatch(ctx, batch)
+					return
 				}
 			}
 			batch = append(batch, delURLs)
 			if len(batch) >= delURLsBatchSize {
 				db.executeDelBatch(ctx, batch)
-				batch = nil
+				batch = batch[:0]
 			}
 		case <-ticker.C:
 			if len(batch) > 0 {
 				db.executeDelBatch(ctx, batch)
-				batch = nil
+				batch = batch[:0]
 			}
 		case <-ctx.Done():
 			if len(batch) > 0 {
@@ -284,13 +285,9 @@ func (db *URLPgStore) GetUserURLs(ctx context.Context, userID int) ([]ShortenURL
 	return userURLs, nil
 }
 
-func (db *URLPgStore) DeleteUserURLs(ctx context.Context, userID int, urls []string) error {
-	select {
-	case db.urlDelCh <- urlDelBatchData{userID: userID, urls: urls}:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
+func (db *URLPgStore) DeleteUserURLs(userID int, urls []string) error {
+	db.urlDelCh <- urlDelBatchData{userID: userID, urls: urls}
+	return nil
 }
 
 func (db *URLPgStore) IsValidID(id string) bool {

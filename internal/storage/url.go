@@ -33,7 +33,7 @@ type URLStorage interface {
 	// Получить все сокращенные пользователем ссылки
 	GetUserURLs(ctx context.Context, id int) (urls []ShortenURL, err error)
 	// Удалить сокращенные ссылки пользователя
-	DeleteUserURLs(ctx context.Context, userID int, urls []string) error
+	DeleteUserURLs(userID int, urls []string) error
 	// Проверить валидность сокращенной ссылки (проверка формата)
 	IsValidID(id string) bool
 	// Проверка связи с БД (для всех остальных хранилищ ничего не делает)

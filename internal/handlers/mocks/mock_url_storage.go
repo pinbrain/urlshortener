@@ -50,6 +50,6 @@ func (m *MockURLStorage) SaveBatchURL(_ context.Context, _ []storage.ShortenURL,
 	return nil
 }
 
-func (m *MockURLStorage) DeleteUserURLs(_ context.Context, _ int, _ []string) error {
+func (m *MockURLStorage) DeleteUserURLs(_ int, _ []string) error {
 	return nil
 }

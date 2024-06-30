@@ -13,7 +13,7 @@ import (
 )
 
 type URLMapStore struct {
-	store     map[string]string
+	store     map[string]URLMapData
 	userStore map[int][]string
 	userMaxID int
 	mutex     sync.RWMutex
@@ -30,11 +30,17 @@ type URLMapFileRecord struct {
 	OriginalURL string `json:"original_url"`
 	ShortURL    string `json:"short_url"`
 	UserID      int    `json:"user_id"`
+	IsDeleted   bool   `json:"is_deleted"`
+}
+
+type URLMapData struct {
+	OriginalURL string
+	IsDeleted   bool
 }
 
 func NewURLMapStore(storageFile string) (*URLMapStore, error) {
 	urlMapStore := &URLMapStore{
-		store:     make(map[string]string),
+		store:     make(map[string]URLMapData),
 		userStore: make(map[int][]string),
 	}
 
@@ -57,7 +63,10 @@ func NewURLMapStore(storageFile string) (*URLMapStore, error) {
 				}
 				return nil, err
 			}
-			urlMapStore.store[record.ShortURL] = record.OriginalURL
+			urlMapStore.store[record.ShortURL] = URLMapData{
+				OriginalURL: record.OriginalURL,
+				IsDeleted:   record.IsDeleted,
+			}
 			userURLs := urlMapStore.userStore[record.UserID]
 			urlMapStore.userStore[record.UserID] = append(userURLs, record.ShortURL)
 			if urlMapStore.userMaxID < record.UserID {
@@ -81,7 +90,7 @@ func (s *URLMapStore) SaveURL(_ context.Context, url string, userID int) (string
 			return "", err
 		}
 	}
-	s.store[id] = url
+	s.store[id] = URLMapData{OriginalURL: url, IsDeleted: false}
 	s.userStore[userID] = append(s.userStore[userID], id)
 	return id, nil
 }
@@ -100,11 +109,14 @@ func (s *URLMapStore) SaveBatchURL(ctx context.Context, urls []ShortenURL, userI
 func (s *URLMapStore) GetURL(_ context.Context, id string) (string, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
-	url, ok := s.store[id]
+	urlData, ok := s.store[id]
 	if !ok {
 		return "", nil
 	}
-	return url, nil
+	if urlData.IsDeleted {
+		return "", ErrIsDeleted
+	}
+	return urlData.OriginalURL, nil
 }
 
 func (s *URLMapStore) IsValidID(id string) bool {
@@ -141,17 +153,28 @@ func (s *URLMapStore) GetUserURLs(_ context.Context, userID int) ([]ShortenURL, 
 	var userURLs []ShortenURL
 	userStore := s.userStore[userID]
 	for _, url := range userStore {
+		if s.store[url].IsDeleted {
+			continue
+		}
 		userURLs = append(userURLs, ShortenURL{
 			Shorten:  url,
-			Original: s.store[url],
+			Original: s.store[url].OriginalURL,
 		})
 	}
 	return userURLs, nil
 }
 
-// TODO: возможно реализовать в будущем
-func (s *URLMapStore) DeleteUserURLs(_ context.Context, _ int, _ []string) error {
-	return ErrNotImplemented
+func (s *URLMapStore) DeleteUserURLs(_ int, urls []string) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	for _, url := range urls {
+		urlData, ok := s.store[url]
+		if !ok || urlData.IsDeleted {
+			continue
+		}
+		s.store[url] = URLMapData{OriginalURL: s.store[url].OriginalURL, IsDeleted: true}
+	}
+	return nil
 }
 
 func (s *URLMapStore) Ping(_ context.Context) error {

@@ -247,15 +247,9 @@ func (h *URLHandler) HandleDeleteUserURLs(w http.ResponseWriter, r *http.Request
 		http.Error(w, "Отсутствуют данные для удаления", http.StatusBadRequest)
 		return
 	}
-	if err := h.urlStore.DeleteUserURLs(r.Context(), user.ID, req); err != nil {
-		if errors.Is(err, storage.ErrNotImplemented) {
-			w.WriteHeader(http.StatusNotImplemented)
-			return
-		}
-		logger.Log.Errorw("Error in deleting user urls", "err", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
+	go func() {
+		h.urlStore.DeleteUserURLs(user.ID, req)
+	}()
 	w.WriteHeader(http.StatusAccepted)
 }
 
