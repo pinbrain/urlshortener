@@ -195,8 +195,10 @@ func (s *URLMapStore) processSyncFileData() error {
 		logger.Log.Debugln("starting file sync")
 		// Временный файл для копирования в него всех данных
 		tmpFile, err := os.CreateTemp(".", "jsondb-*.tmp")
+		tmpIsClosed := false
 		defer func() {
-			if err = tmpFile.Close(); err != nil {
+			if err = tmpFile.Close(); err != nil && !tmpIsClosed {
+				logger.Log.Errorf("failed to close temporary file: %w", err)
 			}
 		}()
 		if err != nil {
@@ -222,6 +224,7 @@ func (s *URLMapStore) processSyncFileData() error {
 		if err = tmpFile.Close(); err != nil {
 			return fmt.Errorf("failed to close temporary file: %w", err)
 		}
+		tmpIsClosed = true
 		if err = s.jsonDB.file.Close(); err != nil {
 			return fmt.Errorf("failed to close the original file: %w", err)
 		}
