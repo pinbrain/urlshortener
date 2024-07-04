@@ -60,5 +60,5 @@ func NewURLStorage(ctx context.Context, cfg URLStorageConfig) (URLStorage, error
 	if cfg.DSN != "" {
 		return NewURLPgStore(ctx, PgConfig{DSN: cfg.DSN})
 	}
-	return NewURLMapStore(cfg.StorageFile)
+	return NewURLMapStore(ctx, cfg.StorageFile)
 }

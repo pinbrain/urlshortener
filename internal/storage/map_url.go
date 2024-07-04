@@ -8,7 +8,9 @@ import (
 	"os"
 	"regexp"
 	"sync"
+	"time"
 
+	"github.com/pinbrain/urlshortener/internal/logger"
 	"github.com/pinbrain/urlshortener/internal/utils"
 )
 
@@ -21,9 +23,10 @@ type URLMapStore struct {
 }
 
 type jsonDB struct {
-	file    *os.File
-	encoder *json.Encoder
-	decoder *json.Decoder
+	file         *os.File
+	encoder      *json.Encoder
+	decoder      *json.Decoder
+	needSyncFile bool
 }
 
 type URLMapFileRecord struct {
@@ -35,10 +38,13 @@ type URLMapFileRecord struct {
 
 type URLMapData struct {
 	OriginalURL string
+	UserID      int
 	IsDeleted   bool
 }
 
-func NewURLMapStore(storageFile string) (*URLMapStore, error) {
+const syncFileInterval = 30
+
+func NewURLMapStore(ctx context.Context, storageFile string) (*URLMapStore, error) {
 	urlMapStore := &URLMapStore{
 		store:     make(map[string]URLMapData),
 		userStore: make(map[int][]string),
@@ -66,6 +72,7 @@ func NewURLMapStore(storageFile string) (*URLMapStore, error) {
 			urlMapStore.store[record.ShortURL] = URLMapData{
 				OriginalURL: record.OriginalURL,
 				IsDeleted:   record.IsDeleted,
+				UserID:      record.UserID,
 			}
 			userURLs := urlMapStore.userStore[record.UserID]
 			urlMapStore.userStore[record.UserID] = append(userURLs, record.ShortURL)
@@ -73,6 +80,8 @@ func NewURLMapStore(storageFile string) (*URLMapStore, error) {
 				urlMapStore.userMaxID = record.UserID
 			}
 		}
+
+		go urlMapStore.syncFileData(ctx)
 	}
 
 	return urlMapStore, nil
@@ -90,7 +99,7 @@ func (s *URLMapStore) SaveURL(_ context.Context, url string, userID int) (string
 			return "", err
 		}
 	}
-	s.store[id] = URLMapData{OriginalURL: url, IsDeleted: false}
+	s.store[id] = URLMapData{OriginalURL: url, IsDeleted: false, UserID: userID}
 	s.userStore[userID] = append(s.userStore[userID], id)
 	return id, nil
 }
@@ -164,17 +173,91 @@ func (s *URLMapStore) GetUserURLs(_ context.Context, userID int) ([]ShortenURL, 
 	return userURLs, nil
 }
 
-func (s *URLMapStore) DeleteUserURLs(_ int, urls []string) error {
+func (s *URLMapStore) DeleteUserURLs(userID int, urls []string) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	for _, url := range urls {
 		urlData, ok := s.store[url]
-		if !ok || urlData.IsDeleted {
+		if !ok || urlData.IsDeleted || urlData.UserID != userID {
 			continue
 		}
 		s.store[url] = URLMapData{OriginalURL: s.store[url].OriginalURL, IsDeleted: true}
+		s.jsonDB.needSyncFile = true
 	}
 	return nil
+}
+
+func (s *URLMapStore) processSyncFileData() error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	if s.jsonDB.file != nil {
+		logger.Log.Debugln("starting file sync")
+		// Временный файл для копирования в него всех данных
+		tmpFile, err := os.CreateTemp(".", "jsondb-*.tmp")
+		defer tmpFile.Close()
+		if err != nil {
+			return fmt.Errorf("failed to create temporary file: %w", err)
+		}
+
+		tmpEncoder := json.NewEncoder(tmpFile)
+
+		// Все записи из памяти переносим во временный файл
+		for shortURL, data := range s.store {
+			record := URLMapFileRecord{
+				OriginalURL: data.OriginalURL,
+				ShortURL:    shortURL,
+				UserID:      data.UserID,
+				IsDeleted:   data.IsDeleted,
+			}
+			if err = tmpEncoder.Encode(&record); err != nil {
+				return fmt.Errorf("failed to encode record to temporary file: %w", err)
+			}
+		}
+
+		// Закрываем файлы для замены старого на новый
+		if err = tmpFile.Close(); err != nil {
+			return fmt.Errorf("failed to close temporary file: %w", err)
+		}
+		if err = s.jsonDB.file.Close(); err != nil {
+			return fmt.Errorf("failed to close the original file: %w", err)
+		}
+		if err = os.Rename(tmpFile.Name(), s.jsonDB.file.Name()); err != nil {
+			return fmt.Errorf("failed to replace the original file: %w", err)
+		}
+
+		// Переоткрываем новый файл для использования хранилищем
+		s.jsonDB.file, err = os.OpenFile(s.jsonDB.file.Name(), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+		if err != nil {
+			return fmt.Errorf("failed to reopen the original file: %w", err)
+		}
+		s.jsonDB.encoder = json.NewEncoder(s.jsonDB.file)
+		s.jsonDB.decoder = json.NewDecoder(s.jsonDB.file)
+		s.jsonDB.needSyncFile = false
+	}
+
+	return nil
+}
+
+func (s *URLMapStore) syncFileData(ctx context.Context) {
+	ticker := time.NewTicker(syncFileInterval * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			if s.jsonDB.needSyncFile {
+				if err := s.processSyncFileData(); err != nil {
+					logger.Log.Errorw("failed to sync file data", "err", err)
+				}
+			}
+		case <-ctx.Done():
+			if err := s.processSyncFileData(); err != nil {
+				logger.Log.Errorw("failed to sync file data", "err", err)
+			}
+			return
+		}
+	}
 }
 
 func (s *URLMapStore) Ping(_ context.Context) error {
