@@ -195,7 +195,10 @@ func (s *URLMapStore) processSyncFileData() error {
 		logger.Log.Debugln("starting file sync")
 		// Временный файл для копирования в него всех данных
 		tmpFile, err := os.CreateTemp(".", "jsondb-*.tmp")
-		defer tmpFile.Close()
+		defer func() {
+			if err = tmpFile.Close(); err != nil {
+			}
+		}()
 		if err != nil {
 			return fmt.Errorf("failed to create temporary file: %w", err)
 		}
