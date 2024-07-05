@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"time"
 
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/pinbrain/urlshortener/internal/logger"
 	"github.com/pinbrain/urlshortener/internal/utils"
 )
 
@@ -18,8 +20,19 @@ type PgConfig struct {
 }
 
 type URLPgStore struct {
-	pool *pgxpool.Pool
+	pool     *pgxpool.Pool
+	urlDelCh chan urlDelBatchData
 }
+
+type urlDelBatchData struct {
+	userID int
+	urls   []string
+}
+
+const (
+	delURLsBatchSize    = 100
+	delURLBatchInterval = 10
+)
 
 func NewURLPgStore(ctx context.Context, cfg PgConfig) (*URLPgStore, error) {
 	pool, err := initPool(ctx, cfg)
@@ -29,9 +42,14 @@ func NewURLPgStore(ctx context.Context, cfg PgConfig) (*URLPgStore, error) {
 	if err = initSchema(ctx, pool); err != nil {
 		return nil, fmt.Errorf("failed to initialize a db scheme: %w", err)
 	}
-	return &URLPgStore{
-		pool: pool,
-	}, nil
+	store := &URLPgStore{
+		pool:     pool,
+		urlDelCh: make(chan urlDelBatchData, delURLsBatchSize),
+	}
+
+	go store.flushDelURLs(ctx)
+
+	return store, nil
 }
 
 func initPool(ctx context.Context, cfg PgConfig) (*pgxpool.Pool, error) {
@@ -50,23 +68,99 @@ func initPool(ctx context.Context, cfg PgConfig) (*pgxpool.Pool, error) {
 }
 
 func initSchema(ctx context.Context, pool *pgxpool.Pool) error {
-	_, err := pool.Exec(ctx,
-		`CREATE TABLE IF NOT EXISTS shorten_urls (
-			original VARCHAR(65536) NOT NULL UNIQUE,
-			shorten VARCHAR(256) NOT NULL
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	_, err = tx.Exec(ctx,
+		`CREATE TABLE IF NOT EXISTS users (
+			id SERIAL PRIMARY KEY
 		);`,
 	)
 	if err != nil {
 		return err
 	}
-	return nil
+	_, err = tx.Exec(ctx,
+		`CREATE TABLE IF NOT EXISTS shorten_urls (
+			original VARCHAR(65536) NOT NULL UNIQUE,
+			shorten VARCHAR(256) NOT NULL,
+			user_id INT REFERENCES users (id),
+			is_deleted BOOLEAN NOT NULL DEFAULT FALSE
+		);`,
+	)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
-func (db *URLPgStore) SaveURL(ctx context.Context, url string) (string, error) {
+func (db *URLPgStore) flushDelURLs(ctx context.Context) {
+	ticker := time.NewTicker(delURLBatchInterval * time.Second)
+	defer ticker.Stop()
+
+	var batch []urlDelBatchData
+
+	for {
+		select {
+		case delURLs, ok := <-db.urlDelCh:
+			if !ok {
+				if len(batch) > 0 {
+					db.executeDelBatch(ctx, batch)
+					return
+				}
+			}
+			batch = append(batch, delURLs)
+			if len(batch) >= delURLsBatchSize {
+				db.executeDelBatch(ctx, batch)
+				batch = batch[:0]
+			}
+		case <-ticker.C:
+			if len(batch) > 0 {
+				db.executeDelBatch(ctx, batch)
+				batch = batch[:0]
+			}
+		case <-ctx.Done():
+			if len(batch) > 0 {
+				db.executeDelBatch(ctx, batch)
+			}
+			return
+		}
+	}
+}
+
+func (db *URLPgStore) executeDelBatch(ctx context.Context, delBatch []urlDelBatchData) {
+	batch := &pgx.Batch{}
+	stmt := "UPDATE shorten_urls SET is_deleted = TRUE WHERE shorten = @shorten AND user_id = @user_id;"
+	for _, del := range delBatch {
+		for _, url := range del.urls {
+			args := pgx.NamedArgs{
+				"shorten": url,
+				"user_id": del.userID,
+			}
+			batch.Queue(stmt, args)
+		}
+	}
+	err := db.pool.SendBatch(ctx, batch).Close()
+	if err != nil {
+		logger.Log.Errorw("Error in batch deleting user URL", "err", err)
+	}
+}
+
+func (db *URLPgStore) SaveURL(ctx context.Context, url string, userID int) (string, error) {
 	id := utils.NewRandomString(urlIDLength)
+
+	// оставляем возможность сохранять url неавторизованными пользователями
+	var userIDValue interface{}
+	if userID == 0 {
+		userIDValue = nil
+	} else {
+		userIDValue = userID
+	}
+
 	_, err := db.pool.Exec(ctx,
-		"INSERT INTO shorten_urls(original, shorten) VALUES($1, $2);",
-		url, id,
+		"INSERT INTO shorten_urls(original, shorten, user_id) VALUES($1, $2, $3);",
+		url, id, userIDValue,
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -85,15 +179,23 @@ func (db *URLPgStore) SaveURL(ctx context.Context, url string) (string, error) {
 	return id, nil
 }
 
-func (db *URLPgStore) SaveBatchURL(ctx context.Context, urls []ShortenURL) error {
+func (db *URLPgStore) SaveBatchURL(ctx context.Context, urls []ShortenURL, userID int) error {
+	// оставляем возможность сохранять url неавторизованными пользователями
+	var userIDValue interface{}
+	if userID == 0 {
+		userIDValue = nil
+	} else {
+		userIDValue = userID
+	}
 	batch := &pgx.Batch{}
-	stmt := "INSERT INTO shorten_urls(original, shorten) VALUES(@original, @shorten);"
+	stmt := "INSERT INTO shorten_urls(original, shorten, user_id) VALUES(@original, @shorten, @user_id);"
 	for i, url := range urls {
 		id := utils.NewRandomString(urlIDLength)
 		urls[i].Shorten = id
 		args := pgx.NamedArgs{
 			"original": url.Original,
 			"shorten":  id,
+			"user_id":  userIDValue,
 		}
 		batch.Queue(stmt, args)
 	}
@@ -111,18 +213,81 @@ func (db *URLPgStore) SaveBatchURL(ctx context.Context, urls []ShortenURL) error
 
 func (db *URLPgStore) GetURL(ctx context.Context, id string) (string, error) {
 	row := db.pool.QueryRow(ctx,
-		`SELECT original FROM shorten_urls WHERE shorten = $1`,
+		`SELECT original, is_deleted FROM shorten_urls WHERE shorten = $1`,
 		id,
 	)
 
 	var url string
-	if err := row.Scan(&url); err != nil {
+	var isDeleted bool
+	if err := row.Scan(&url, &isDeleted); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", nil
 		}
 		return "", fmt.Errorf("failed to select url from db: %w", err)
 	}
+	if isDeleted {
+		return "", ErrIsDeleted
+	}
 	return url, nil
+}
+
+func (db *URLPgStore) CreateUser(ctx context.Context) (*User, error) {
+	row := db.pool.QueryRow(ctx, "INSERT INTO users DEFAULT VALUES RETURNING id")
+	var user User
+	if err := row.Scan(&user.ID); err != nil {
+		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+	return &user, nil
+}
+
+func (db *URLPgStore) GetUser(ctx context.Context, id int) (*User, error) {
+	if id <= 0 {
+		return nil, errors.New("invalid user id")
+	}
+	row := db.pool.QueryRow(ctx,
+		`SELECT id FROM users WHERE id = $1`,
+		id,
+	)
+	var user User
+	if err := row.Scan(&user.ID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNoData
+		}
+		return nil, fmt.Errorf("failed to select user from db: %w", err)
+	}
+	return &user, nil
+}
+
+func (db *URLPgStore) GetUserURLs(ctx context.Context, userID int) ([]ShortenURL, error) {
+	if userID <= 0 {
+		return nil, errors.New("invalid user id")
+	}
+	rows, err := db.pool.Query(ctx,
+		`SELECT original, shorten FROM shorten_urls WHERE is_deleted = FALSE AND user_id = $1`,
+		userID,
+	)
+	var userURLs []ShortenURL
+	if err != nil {
+		return nil, fmt.Errorf("failed to select user urls from db: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var shortenURL ShortenURL
+		if err = rows.Scan(&shortenURL.Original, &shortenURL.Shorten); err != nil {
+			return nil, fmt.Errorf("failed to read data from db url row: %w", err)
+		}
+		userURLs = append(userURLs, shortenURL)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to select user urls from db: %w", err)
+	}
+	return userURLs, nil
+}
+
+func (db *URLPgStore) DeleteUserURLs(userID int, urls []string) error {
+	db.urlDelCh <- urlDelBatchData{userID: userID, urls: urls}
+	return nil
 }
 
 func (db *URLPgStore) IsValidID(id string) bool {
@@ -138,5 +303,6 @@ func (db *URLPgStore) Ping(ctx context.Context) error {
 
 func (db *URLPgStore) Close() error {
 	db.pool.Close()
+	close(db.urlDelCh)
 	return nil
 }
