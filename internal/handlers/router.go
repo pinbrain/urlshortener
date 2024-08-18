@@ -3,6 +3,7 @@ package handlers
 import (
 	"github.com/go-chi/chi/v5"
 	chi_mwr "github.com/go-chi/chi/v5/middleware"
+
 	"github.com/pinbrain/urlshortener/internal/middleware"
 	"github.com/pinbrain/urlshortener/internal/storage"
 )
