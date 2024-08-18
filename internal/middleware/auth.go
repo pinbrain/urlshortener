@@ -22,7 +22,7 @@ type JWTClaims struct {
 }
 
 const (
-	jwtCookieName = "shortener_jwt"
+	JWTCookieName = "shortener_jwt"
 	jwtSecretKey  = "some_secret_jwt_key"
 )
 
@@ -35,7 +35,7 @@ func NewAuthMiddleware(urlStore storage.URLStorage) AuthMiddleware {
 func (amw *AuthMiddleware) AuthenticateUser(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var jwtClaims *JWTClaims
-		jwtCookie, err := r.Cookie(jwtCookieName)
+		jwtCookie, err := r.Cookie(JWTCookieName)
 		if err == nil {
 			jwtClaims, err = getJWTClaims(jwtCookie.Value)
 			if err != nil {
@@ -82,7 +82,7 @@ func (amw *AuthMiddleware) AuthenticateUser(h http.Handler) http.Handler {
 func (amw *AuthMiddleware) RequireUser(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// В запросе должна быть кука
-		_, err := r.Cookie(jwtCookieName)
+		_, err := r.Cookie(JWTCookieName)
 		if err != nil {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
@@ -104,19 +104,19 @@ func (amw *AuthMiddleware) createNewReqUser(ctx context.Context, w http.Response
 		return nil, fmt.Errorf("error creating user in store: %w", err)
 	}
 	var jwtString string
-	jwtString, err = buildJWTString(userData.ID)
+	jwtString, err = BuildJWTString(userData.ID)
 	if err != nil {
 		return nil, fmt.Errorf("error creating jwt string: %w", err)
 	}
 	jwtCookie := &http.Cookie{
-		Name:  jwtCookieName,
+		Name:  JWTCookieName,
 		Value: jwtString,
 	}
 	http.SetCookie(w, jwtCookie)
 	return userData, nil
 }
 
-func buildJWTString(userID int) (string, error) {
+func BuildJWTString(userID int) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, JWTClaims{UserID: userID})
 	tokenString, err := token.SignedString([]byte(jwtSecretKey))
 	if err != nil {
@@ -145,7 +145,7 @@ func getJWTClaims(tokenString string) (*JWTClaims, error) {
 
 func deleteJWTCookie(w http.ResponseWriter) {
 	cookie := &http.Cookie{
-		Name:  jwtCookieName,
+		Name:  JWTCookieName,
 		Value: "",
 	}
 	cookie.MaxAge = -1
