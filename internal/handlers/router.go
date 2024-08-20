@@ -1,3 +1,4 @@
+// Модуль handlers формирует роутинг всего приложения.
 package handlers
 
 import (
@@ -8,6 +9,7 @@ import (
 	"github.com/pinbrain/urlshortener/internal/storage"
 )
 
+// NewURLRouter определяет роутинг приложения с указанием обработчиков запроса и промежуточных обработчиков.
 func NewURLRouter(urlHandler URLHandler, urlStore storage.URLStorage) chi.Router {
 	r := chi.NewRouter()
 

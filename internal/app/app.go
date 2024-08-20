@@ -1,3 +1,4 @@
+// Модуль app инициализирует и запускает сервис сокращения ссылок.
 package app
 
 import (
@@ -10,6 +11,7 @@ import (
 	"github.com/pinbrain/urlshortener/internal/storage"
 )
 
+// Run загружает конфигурацию, создает хранилище согласно настройкам, запускает http сервер приложения.
 func Run() error {
 	ctx := context.Background()
 	serverConf, err := config.InitConfig()

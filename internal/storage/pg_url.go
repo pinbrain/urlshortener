@@ -16,25 +16,31 @@ import (
 	"github.com/pinbrain/urlshortener/internal/utils"
 )
 
+// PgConfig описывает структуру конфигурации БД.
 type PgConfig struct {
 	DSN string
 }
 
+// URLPgStore описывает структуру хранилища БД.
 type URLPgStore struct {
 	pool     *pgxpool.Pool
 	urlDelCh chan urlDelBatchData
 }
 
+// urlDelBatchData описывает структуру данных для массового удаления ссылок пользователя.
 type urlDelBatchData struct {
 	userID int
 	urls   []string
 }
 
 const (
-	delURLsBatchSize    = 100
+	// Максимальное количество ссылок в очереди на удаление. При достижении будет выполнен запрос на удаление из БД.
+	delURLsBatchSize = 100
+	// Интервал между запуском удаления ссылок из БД (даже если не было достигнуто количество delURLsBatchSize).
 	delURLBatchInterval = 10
 )
 
+// NewURLPgStore создает новое хранилище типа БД (postgresql)
 func NewURLPgStore(ctx context.Context, cfg PgConfig) (*URLPgStore, error) {
 	pool, err := initPool(ctx, cfg)
 	if err != nil {
@@ -53,6 +59,7 @@ func NewURLPgStore(ctx context.Context, cfg PgConfig) (*URLPgStore, error) {
 	return store, nil
 }
 
+// initPool инициализация пула для соединения с БД.
 func initPool(ctx context.Context, cfg PgConfig) (*pgxpool.Pool, error) {
 	poolCfg, err := pgxpool.ParseConfig(cfg.DSN)
 	if err != nil {
@@ -68,6 +75,7 @@ func initPool(ctx context.Context, cfg PgConfig) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
+// initSchema выполняет миграцию (создание таблиц).
 func initSchema(ctx context.Context, pool *pgxpool.Pool) error {
 	tx, err := pool.Begin(ctx)
 	if err != nil {
@@ -96,6 +104,9 @@ func initSchema(ctx context.Context, pool *pgxpool.Pool) error {
 	return tx.Commit(ctx)
 }
 
+// flushDelURLs go рутина, которая собирает ссылки на удаления и запускает функцию удаления из БД.
+// Удаление происходит либо когда количество ссылок на удаление превышает delURLsBatchSize.
+// Либо, даже если ссылок меньше delURLsBatchSize - каждые delURLBatchInterval секунд.
 func (db *URLPgStore) flushDelURLs(ctx context.Context) {
 	ticker := time.NewTicker(delURLBatchInterval * time.Second)
 	defer ticker.Stop()
@@ -130,6 +141,7 @@ func (db *URLPgStore) flushDelURLs(ctx context.Context) {
 	}
 }
 
+// executeDelBatch реализует удаление из БД один батч запросом.
 func (db *URLPgStore) executeDelBatch(ctx context.Context, delBatch []urlDelBatchData) {
 	batch := &pgx.Batch{}
 	stmt := "UPDATE shorten_urls SET is_deleted = TRUE WHERE shorten = @shorten AND user_id = @user_id;"
@@ -148,6 +160,7 @@ func (db *URLPgStore) executeDelBatch(ctx context.Context, delBatch []urlDelBatc
 	}
 }
 
+// SaveURL сохраняет сокращенную ссылку.
 func (db *URLPgStore) SaveURL(ctx context.Context, url string, userID int) (string, error) {
 	id := utils.NewRandomString(urlIDLength)
 
@@ -180,6 +193,7 @@ func (db *URLPgStore) SaveURL(ctx context.Context, url string, userID int) (stri
 	return id, nil
 }
 
+// SaveURL сохраняет массив сокращенных ссылок.
 func (db *URLPgStore) SaveBatchURL(ctx context.Context, urls []ShortenURL, userID int) error {
 	// оставляем возможность сохранять url неавторизованными пользователями
 	var userIDValue interface{}
@@ -212,6 +226,7 @@ func (db *URLPgStore) SaveBatchURL(ctx context.Context, urls []ShortenURL, userI
 	return nil
 }
 
+// GetURL возвращает полную ссылку по сокращенной.
 func (db *URLPgStore) GetURL(ctx context.Context, id string) (string, error) {
 	row := db.pool.QueryRow(ctx,
 		`SELECT original, is_deleted FROM shorten_urls WHERE shorten = $1`,
@@ -232,6 +247,7 @@ func (db *URLPgStore) GetURL(ctx context.Context, id string) (string, error) {
 	return url, nil
 }
 
+// CreateUser сохраняет нового пользователя.
 func (db *URLPgStore) CreateUser(ctx context.Context) (*User, error) {
 	row := db.pool.QueryRow(ctx, "INSERT INTO users DEFAULT VALUES RETURNING id")
 	var user User
@@ -241,6 +257,7 @@ func (db *URLPgStore) CreateUser(ctx context.Context) (*User, error) {
 	return &user, nil
 }
 
+// GetUser возвращает данные пользователя по id.
 func (db *URLPgStore) GetUser(ctx context.Context, id int) (*User, error) {
 	if id <= 0 {
 		return nil, errors.New("invalid user id")
@@ -259,6 +276,7 @@ func (db *URLPgStore) GetUser(ctx context.Context, id int) (*User, error) {
 	return &user, nil
 }
 
+// GetUserURLs возвращает все сохраненные ссылки пользователя.
 func (db *URLPgStore) GetUserURLs(ctx context.Context, userID int) ([]ShortenURL, error) {
 	if userID <= 0 {
 		return nil, errors.New("invalid user id")
@@ -286,22 +304,26 @@ func (db *URLPgStore) GetUserURLs(ctx context.Context, userID int) ([]ShortenURL
 	return userURLs, nil
 }
 
+// DeleteUserURLs удаляет сокращенные ссылки пользователя.
 func (db *URLPgStore) DeleteUserURLs(userID int, urls []string) error {
 	db.urlDelCh <- urlDelBatchData{userID: userID, urls: urls}
 	return nil
 }
 
+// IsValidID проверяет валидность сокращенной ссылки (проверка формата).
 func (db *URLPgStore) IsValidID(id string) bool {
 	regStr := fmt.Sprintf(`^[a-zA-Z0-9]{%d}$`, urlIDLength)
 	validIDReg := regexp.MustCompile(regStr)
 	return validIDReg.MatchString(id)
 }
 
+// Ping проверяет связь с БД.
 func (db *URLPgStore) Ping(ctx context.Context) error {
 	err := db.pool.Ping(ctx)
 	return err
 }
 
+// Close закрывает пулл и все соединения с БД.
 func (db *URLPgStore) Close() error {
 	db.pool.Close()
 	close(db.urlDelCh)

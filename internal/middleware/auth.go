@@ -13,26 +13,31 @@ import (
 	"github.com/pinbrain/urlshortener/internal/storage"
 )
 
+// AuthMiddleware описывает структуру обработчика для авторизации и аутентификации.
 type AuthMiddleware struct {
-	urlStore storage.URLStorage
+	urlStore storage.URLStorage // Хранилище приложения
 }
 
+// JWTClaims описывает структуру JWT токена.
 type JWTClaims struct {
-	jwt.RegisteredClaims
-	UserID int
+	jwt.RegisteredClaims     // Типовые параметры JWT токена
+	UserID               int // ID пользователя
 }
 
+// Константы для работы с jwt
 const (
-	JWTCookieName = "shortener_jwt"
-	jwtSecretKey  = "some_secret_jwt_key"
+	JWTCookieName = "shortener_jwt"       // Название cookie в которой хранится jwt токен
+	jwtSecretKey  = "some_secret_jwt_key" // Ключ для подписи jwt токена
 )
 
+// NewAuthMiddleware создает обработчик авторизации и аутентификации.
 func NewAuthMiddleware(urlStore storage.URLStorage) AuthMiddleware {
 	return AuthMiddleware{
 		urlStore: urlStore,
 	}
 }
 
+// AuthenticateUser аутентифицирует пользователя запроса.
 func (amw *AuthMiddleware) AuthenticateUser(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var jwtClaims *JWTClaims
@@ -80,6 +85,8 @@ func (amw *AuthMiddleware) AuthenticateUser(h http.Handler) http.Handler {
 	})
 }
 
+// RequireUser проверяет что пользователь авторизован.
+// В противном случае прерывает обработку запроса и возвращает ошибку Unauthorized.
 func (amw *AuthMiddleware) RequireUser(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// В запросе должна быть кука
@@ -99,6 +106,8 @@ func (amw *AuthMiddleware) RequireUser(h http.Handler) http.Handler {
 	})
 }
 
+// createNewReqUser создает нового пользователя.
+// Добавляет его данные в контекст запроса и добавляет cookie с jwt токеном.
 func (amw *AuthMiddleware) createNewReqUser(ctx context.Context, w http.ResponseWriter) (*storage.User, error) {
 	userData, err := amw.urlStore.CreateUser(ctx)
 	if err != nil {
@@ -117,6 +126,7 @@ func (amw *AuthMiddleware) createNewReqUser(ctx context.Context, w http.Response
 	return userData, nil
 }
 
+// BuildJWTString формирует jwt токен с переданными данными.
 func BuildJWTString(userID int) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, JWTClaims{UserID: userID})
 	tokenString, err := token.SignedString([]byte(jwtSecretKey))
@@ -126,6 +136,7 @@ func BuildJWTString(userID int) (string, error) {
 	return tokenString, nil
 }
 
+// getJWTClaims возвращает данные из jwt токена, проверяя его валидность.
 func getJWTClaims(tokenString string) (*JWTClaims, error) {
 	claims := &JWTClaims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims,
@@ -144,6 +155,7 @@ func getJWTClaims(tokenString string) (*JWTClaims, error) {
 	return claims, nil
 }
 
+// deleteJWTCookie удаляет cookie с jwt токеном.
 func deleteJWTCookie(w http.ResponseWriter) {
 	cookie := &http.Cookie{
 		Name:  JWTCookieName,

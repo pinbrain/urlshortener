@@ -16,34 +16,41 @@ import (
 	"github.com/pinbrain/urlshortener/internal/utils"
 )
 
+// URLHandler определяет структуру обработчика запросов сервиса.
 type URLHandler struct {
-	urlStore storage.URLStorage
-	baseURL  *url.URL
+	urlStore storage.URLStorage // Хранилище приложения
+	baseURL  *url.URL           // Базовый url сокращаемых ссылок
 }
 
+// shortenRequest определяет формат запроса на сокращение ссылки.
 type shortenRequest struct {
 	URL string `json:"url"`
 }
 
+// shortenRequest определяет формат ответа на сокращение ссылки.
 type shortenResponse struct {
 	Result string `json:"result"`
 }
 
+// shortenRequest определяет формат запроса на сокращение нескольких ссылок.
 type batchShortenRequest struct {
 	CorrelationID string `json:"correlation_id"`
 	OriginalURL   string `json:"original_url"`
 }
 
+// shortenRequest определяет формат ответа на сокращение нескольких ссылок.
 type batchShortenResponse struct {
 	CorrelationID string `json:"correlation_id"`
 	ShortURL      string `json:"short_url"`
 }
 
+// userURLResponse определяет формат ответа на запрос ссылок, сокращенных пользователем.
 type userURLResponse struct {
-	OriginalURL string `json:"original_url"`
-	ShortURL    string `json:"short_url"`
+	OriginalURL string `json:"original_url"` // Исходная ссылка
+	ShortURL    string `json:"short_url"`    // Сокращенная ссылка
 }
 
+// NewURLHandler создает и возвращает новый обработчик запросов.
 func NewURLHandler(urlStore storage.URLStorage, baseURL url.URL) URLHandler {
 	return URLHandler{
 		urlStore: urlStore,
@@ -51,6 +58,7 @@ func NewURLHandler(urlStore storage.URLStorage, baseURL url.URL) URLHandler {
 	}
 }
 
+// HandleShortenURL обрабатывает запрос на сокращение ссылки (формат тела запроса - строка).
 func (h *URLHandler) HandleShortenURL(w http.ResponseWriter, r *http.Request) {
 	contentType := r.Header.Get("Content-Type")
 	if !strings.Contains(contentType, "text/plain") && !strings.Contains(contentType, "application/x-gzip") {
@@ -91,6 +99,7 @@ func (h *URLHandler) HandleShortenURL(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandleShortenURL обрабатывает запрос на сокращение ссылки (формат тела запроса - JSON).
 func (h *URLHandler) HandleJSONShortenURL(w http.ResponseWriter, r *http.Request) {
 	contentType := r.Header.Get("Content-Type")
 	if !strings.Contains(contentType, "application/json") {
@@ -143,6 +152,7 @@ func (h *URLHandler) HandleJSONShortenURL(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// HandleShortenBatchURL обрабатывает запрос на сокращение нескольких ссылок.
 func (h *URLHandler) HandleShortenBatchURL(w http.ResponseWriter, r *http.Request) {
 	contentType := r.Header.Get("Content-Type")
 	if !strings.Contains(contentType, "application/json") {
@@ -201,6 +211,7 @@ func (h *URLHandler) HandleShortenBatchURL(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+// HandleGetUsersURLs обрабатывает запрос на получение ссылок, сокращенных пользователем.
 func (h *URLHandler) HandleGetUsersURLs(w http.ResponseWriter, r *http.Request) {
 	user := context.GetCtxUser(r.Context())
 	userURLs, err := h.urlStore.GetUserURLs(r.Context(), user.ID)
@@ -229,6 +240,7 @@ func (h *URLHandler) HandleGetUsersURLs(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+// HandleGetUsersURLs обрабатывает запрос на удаление сокращенных ссылок.
 func (h *URLHandler) HandleDeleteUserURLs(w http.ResponseWriter, r *http.Request) {
 	user := context.GetCtxUser(r.Context())
 	contentType := r.Header.Get("Content-Type")
@@ -254,6 +266,7 @@ func (h *URLHandler) HandleDeleteUserURLs(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusAccepted)
 }
 
+// HandleGetUsersURLs обрабатывает запрос переход по сокращенной ссылке.
 func (h *URLHandler) HandleRedirect(w http.ResponseWriter, r *http.Request) {
 	urlID := chi.URLParam(r, "urlID")
 	if !h.urlStore.IsValidID(urlID) {
@@ -277,6 +290,7 @@ func (h *URLHandler) HandleRedirect(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
+// HandleGetUsersURLs обрабатывает запрос на проверку соединения с хранилищем данных.
 func (h *URLHandler) HandlePing(w http.ResponseWriter, r *http.Request) {
 	if err := h.urlStore.Ping(r.Context()); err != nil {
 		logger.Log.Errorw("Error trying to ping db", "err", err)

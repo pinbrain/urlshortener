@@ -14,6 +14,7 @@ import (
 	"github.com/pinbrain/urlshortener/internal/utils"
 )
 
+// URLMapStore описывает структуру хранилища в памяти и в json файле (поддерживает оба вида).
 type URLMapStore struct {
 	store     map[string]URLMapData
 	userStore map[int][]string
@@ -22,6 +23,7 @@ type URLMapStore struct {
 	jsonDB    jsonDB
 }
 
+// jsonDB описывает структуру для записи и чтения данных из json файла.
 type jsonDB struct {
 	file         *os.File
 	encoder      *json.Encoder
@@ -29,6 +31,7 @@ type jsonDB struct {
 	needSyncFile bool
 }
 
+// URLMapFileRecord описывает структуру хранимых данных в json файле.
 type URLMapFileRecord struct {
 	OriginalURL string `json:"original_url"`
 	ShortURL    string `json:"short_url"`
@@ -36,14 +39,17 @@ type URLMapFileRecord struct {
 	IsDeleted   bool   `json:"is_deleted"`
 }
 
+// URLMapData описывает структуру хранимых ссылок в памяти.
 type URLMapData struct {
 	OriginalURL string
 	UserID      int
 	IsDeleted   bool
 }
 
-const syncFileInterval = 30
+const syncFileInterval = 30 // Интервал синхронизации данных в памяти и файле.
 
+// NewURLMapStore создает новое хранилище в памяти согласно конфигурации.
+// При соответствующих настройках так же будет добавлена поддержка данных в json файле.
 func NewURLMapStore(ctx context.Context, storageFile string) (*URLMapStore, error) {
 	urlMapStore := &URLMapStore{
 		store:     make(map[string]URLMapData),
@@ -87,6 +93,7 @@ func NewURLMapStore(ctx context.Context, storageFile string) (*URLMapStore, erro
 	return urlMapStore, nil
 }
 
+// SaveURL сохраняет сокращенную ссылку.
 func (s *URLMapStore) SaveURL(_ context.Context, url string, userID int) (string, error) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -104,6 +111,7 @@ func (s *URLMapStore) SaveURL(_ context.Context, url string, userID int) (string
 	return id, nil
 }
 
+// SaveURL сохраняет массив сокращенных ссылок.
 func (s *URLMapStore) SaveBatchURL(ctx context.Context, urls []ShortenURL, userID int) error {
 	for i, url := range urls {
 		urlID, err := s.SaveURL(ctx, url.Original, userID)
@@ -115,6 +123,7 @@ func (s *URLMapStore) SaveBatchURL(ctx context.Context, urls []ShortenURL, userI
 	return nil
 }
 
+// GetURL возвращает полную ссылку по сокращенной.
 func (s *URLMapStore) GetURL(_ context.Context, id string) (string, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
@@ -128,12 +137,14 @@ func (s *URLMapStore) GetURL(_ context.Context, id string) (string, error) {
 	return urlData.OriginalURL, nil
 }
 
+// IsValidID проверяет валидность сокращенной ссылки (проверка формата).
 func (s *URLMapStore) IsValidID(id string) bool {
 	regStr := fmt.Sprintf(`^[a-zA-Z0-9]{%d}$`, urlIDLength)
 	validIDReg := regexp.MustCompile(regStr)
 	return validIDReg.MatchString(id)
 }
 
+// CreateUser сохраняет нового пользователя.
 func (s *URLMapStore) CreateUser(_ context.Context) (*User, error) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -141,6 +152,7 @@ func (s *URLMapStore) CreateUser(_ context.Context) (*User, error) {
 	return &User{ID: s.userMaxID}, nil
 }
 
+// GetUser возвращает данные пользователя по id.
 func (s *URLMapStore) GetUser(_ context.Context, id int) (*User, error) {
 	if id <= 0 {
 		return nil, errors.New("invalid user id")
@@ -152,6 +164,7 @@ func (s *URLMapStore) GetUser(_ context.Context, id int) (*User, error) {
 	return &User{ID: id}, nil
 }
 
+// GetUserURLs возвращает все сохраненные ссылки пользователя.
 func (s *URLMapStore) GetUserURLs(_ context.Context, userID int) ([]ShortenURL, error) {
 	if userID <= 0 {
 		return nil, errors.New("invalid user id")
@@ -173,6 +186,7 @@ func (s *URLMapStore) GetUserURLs(_ context.Context, userID int) ([]ShortenURL, 
 	return userURLs, nil
 }
 
+// DeleteUserURLs удаляет сокращенные ссылки пользователя.
 func (s *URLMapStore) DeleteUserURLs(userID int, urls []string) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -187,6 +201,7 @@ func (s *URLMapStore) DeleteUserURLs(userID int, urls []string) error {
 	return nil
 }
 
+// processSyncFileData реализует синхронизацию данных в памяти и в json файле.
 func (s *URLMapStore) processSyncFileData() error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -245,6 +260,8 @@ func (s *URLMapStore) processSyncFileData() error {
 	return nil
 }
 
+// syncFileData - go рутина запускающая синхронизацию данных в памяти в json файле.
+// Запускает синхронизацию каждые syncFileInterval секунд.
 func (s *URLMapStore) syncFileData(ctx context.Context) {
 	ticker := time.NewTicker(syncFileInterval * time.Second)
 	defer ticker.Stop()
@@ -266,10 +283,12 @@ func (s *URLMapStore) syncFileData(ctx context.Context) {
 	}
 }
 
+// Ping проверяет связь с хранилищем. В данном случае ничего не делает.
 func (s *URLMapStore) Ping(_ context.Context) error {
 	return nil
 }
 
+// Close закрывает файл.
 func (s *URLMapStore) Close() error {
 	if s.jsonDB.file != nil {
 		return s.jsonDB.file.Close()
