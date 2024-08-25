@@ -30,23 +30,23 @@ func TestURLHandler_HandleShortenURL(t *testing.T) {
 	mockStorage := mocks.NewMockURLStorage(ctrl)
 
 	type want struct {
-		statusCode int
 		resBody    string
+		statusCode int
 	}
 	type request struct {
 		url         string
 		contentType string
 	}
 	type urlStore struct {
-		urlID         string
 		urlStoreError error
+		urlID         string
 	}
 	tests := []struct {
+		urlStore *urlStore
+		request  request
 		name     string
 		baseURL  string
 		want     want
-		request  request
-		urlStore *urlStore
 	}{
 		{
 			name:    "Успешный запрос",
@@ -147,23 +147,23 @@ func TestURLHandler_HandleJSONShortenURL(t *testing.T) {
 	mockStorage := mocks.NewMockURLStorage(ctrl)
 
 	type want struct {
-		statusCode int
 		resBody    string
+		statusCode int
 	}
 	type request struct {
 		url         string
 		contentType string
 	}
 	type urlStore struct {
-		urlID         string
 		urlStoreError error
+		urlID         string
 	}
 	tests := []struct {
+		urlStore *urlStore
+		request  request
 		name     string
 		baseURL  string
 		want     want
-		request  request
-		urlStore *urlStore
 	}{
 		{
 			name:    "Успешный запрос",
@@ -268,22 +268,22 @@ func TestURLHandler_HandleRedirect(t *testing.T) {
 	mockStorage := mocks.NewMockURLStorage(ctrl)
 
 	type want struct {
-		statusCode int
 		location   string
+		statusCode int
 	}
 	type request struct {
 		reqURL string
 		urlID  string
 	}
 	type urlStore struct {
-		url           string
 		urlStoreError error
+		url           string
 	}
 	tests := []struct {
-		name      string
-		request   request
-		want      want
 		urlStore  *urlStore
+		request   request
+		name      string
+		want      want
 		isValidID bool
 	}{
 		{
@@ -389,23 +389,23 @@ func TestURLHandler_HandleShortenBatchURL(t *testing.T) {
 	mockStorage := mocks.NewMockURLStorage(ctrl)
 
 	type want struct {
-		statusCode int
 		resBody    string
+		statusCode int
 	}
 	type request struct {
-		body        []batchShortenRequest
 		contentType string
+		body        []batchShortenRequest
 	}
 	type urlStore struct {
 		storeError error
 		shortURLs  []storage.ShortenURL
 	}
 	tests := []struct {
+		urlStore *urlStore
 		name     string
 		baseURL  string
-		want     want
 		request  request
-		urlStore *urlStore
+		want     want
 	}{
 		{
 			name:    "Успешный запрос",
@@ -547,17 +547,17 @@ func TestURLHandler_HandleGetUsersURLs(t *testing.T) {
 	require.NoError(t, err)
 
 	type want struct {
-		statusCode int
 		resBody    string
+		statusCode int
 	}
 	type urlStore struct {
-		userURLs   []storage.ShortenURL
 		storeError error
+		userURLs   []storage.ShortenURL
 	}
 	tests := []struct {
+		urlStore *urlStore
 		name     string
 		want     want
-		urlStore *urlStore
 	}{
 		{
 			name: "Успешный запрос",
@@ -694,7 +694,7 @@ func TestURLHandler_HandleDeleteUserURLs(t *testing.T) {
 			require.NoError(t, mErr)
 			request := httptest.NewRequest(http.MethodDelete, "/api/user/urls", bytes.NewReader(reqBody))
 
-			if tt.body != nil && len(tt.body) > 0 {
+			if len(tt.body) > 0 {
 				mockStorage.EXPECT().
 					DeleteUserURLs(gomock.Any(), gomock.Any()).
 					Times(1).
@@ -736,9 +736,9 @@ func TestURLHandler_HandlePing(t *testing.T) {
 		statusCode int
 	}
 	tests := []struct {
+		pingError error
 		name      string
 		want      want
-		pingError error
 	}{
 		{
 			name: "Успешный пинг",

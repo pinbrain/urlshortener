@@ -1,4 +1,4 @@
-// Модуль handlers формирует роутинг всего приложения.
+// Package handlers формирует роутинг всего приложения.
 package handlers
 
 import (

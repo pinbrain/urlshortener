@@ -99,7 +99,7 @@ func (h *URLHandler) HandleShortenURL(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HandleShortenURL обрабатывает запрос на сокращение ссылки (формат тела запроса - JSON).
+// HandleJSONShortenURL обрабатывает запрос на сокращение ссылки (формат тела запроса - JSON).
 func (h *URLHandler) HandleJSONShortenURL(w http.ResponseWriter, r *http.Request) {
 	contentType := r.Header.Get("Content-Type")
 	if !strings.Contains(contentType, "application/json") {
@@ -240,7 +240,7 @@ func (h *URLHandler) HandleGetUsersURLs(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-// HandleGetUsersURLs обрабатывает запрос на удаление сокращенных ссылок.
+// HandleDeleteUserURLs обрабатывает запрос на удаление сокращенных ссылок.
 func (h *URLHandler) HandleDeleteUserURLs(w http.ResponseWriter, r *http.Request) {
 	user := context.GetCtxUser(r.Context())
 	contentType := r.Header.Get("Content-Type")
@@ -266,7 +266,7 @@ func (h *URLHandler) HandleDeleteUserURLs(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusAccepted)
 }
 
-// HandleGetUsersURLs обрабатывает запрос переход по сокращенной ссылке.
+// HandleRedirect обрабатывает запрос переход по сокращенной ссылке.
 func (h *URLHandler) HandleRedirect(w http.ResponseWriter, r *http.Request) {
 	urlID := chi.URLParam(r, "urlID")
 	if !h.urlStore.IsValidID(urlID) {
@@ -290,7 +290,7 @@ func (h *URLHandler) HandleRedirect(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
-// HandleGetUsersURLs обрабатывает запрос на проверку соединения с хранилищем данных.
+// HandlePing обрабатывает запрос на проверку соединения с хранилищем данных.
 func (h *URLHandler) HandlePing(w http.ResponseWriter, r *http.Request) {
 	if err := h.urlStore.Ping(r.Context()); err != nil {
 		logger.Log.Errorw("Error trying to ping db", "err", err)
