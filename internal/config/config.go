@@ -1,3 +1,4 @@
+// Модуль config формирует и проверяет конфигурацию приложения.
 package config
 
 import (
@@ -9,14 +10,16 @@ import (
 	"github.com/caarlos0/env/v11"
 )
 
+// ServerConf определяет структуру конфигурации.
 type ServerConf struct {
-	ServerAddress string  `env:"SERVER_ADDRESS"`
-	BaseURL       url.URL `env:"BASE_URL"`
-	LogLevel      string  `env:"LOG_LEVEL"`
-	StorageFile   string  `env:"FILE_STORAGE_PATH"`
-	DSN           string  `env:"DATABASE_DSN"`
+	ServerAddress string  `env:"SERVER_ADDRESS"`    // Адрес запуска HTTP-сервера.
+	BaseURL       url.URL `env:"BASE_URL"`          // Базовый адрес результирующего сокращённого URL.
+	LogLevel      string  `env:"LOG_LEVEL"`         // Уровень логирования.
+	StorageFile   string  `env:"FILE_STORAGE_PATH"` // Полное имя файла, куда сохраняются данные.
+	DSN           string  `env:"DATABASE_DSN"`      // Строка с адресом подключения к БД.
 }
 
+// validateBaseURL проверяет корректность базового адреса сокращенных ссылок.
 func validateBaseURL(baseURL string) (*url.URL, error) {
 	parsedURL, err := url.ParseRequestURI(baseURL)
 	if err != nil {
@@ -25,6 +28,7 @@ func validateBaseURL(baseURL string) (*url.URL, error) {
 	return parsedURL, nil
 }
 
+// validateStorageFileName проверяет корректность имени файла для хранение данных.
 func validateStorageFileName(file string) error {
 	if file == "" {
 		return nil
@@ -35,6 +39,7 @@ func validateStorageFileName(file string) error {
 	return nil
 }
 
+// loadFlags загружает параметры конфигурации из флагов.
 func loadFlags(cfg *ServerConf) error {
 	flag.StringVar(&cfg.ServerAddress, "a", ":8080", "Адрес запуска HTTP-сервера")
 	flag.StringVar(&cfg.LogLevel, "l", "info", "Уровень логирования")
@@ -59,6 +64,7 @@ func loadFlags(cfg *ServerConf) error {
 	return nil
 }
 
+// loadEnvs загружает параметры конфигурации из переменных окружения.
 func loadEnvs(cfg *ServerConf) error {
 	err := env.Parse(cfg)
 	if err != nil {
@@ -72,6 +78,7 @@ func loadEnvs(cfg *ServerConf) error {
 	return nil
 }
 
+// InitConfig формирует итоговую конфигурацию приложения.
 func InitConfig() (ServerConf, error) {
 	serverConf := ServerConf{}
 

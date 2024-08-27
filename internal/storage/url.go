@@ -5,20 +5,22 @@ import (
 	"errors"
 )
 
+// Длина сокращенной ссылки.
 const urlIDLength = 8
 
-// ErrConflict указывает на конфликт данных в хранилище.
+// ErrConflict - ошибка, указывающая на конфликт данных в хранилище.
 var ErrConflict = errors.New("data conflict")
 
-// ErrNoData указывает на отсутствие данных в хранилище.
+// ErrNoData - ошибка, указывающая на отсутствие данных в хранилище.
 var ErrNoData = errors.New("no data")
 
-// ErrIsDeleted указывает на то, что ссылка была удалена.
+// ErrIsDeleted - ошибка, указывающая на то, что ссылка была удалена.
 var ErrIsDeleted = errors.New("deleted")
 
-// ErrNotImplemented указывает на то, что метод не реализован.
+// ErrNotImplemented - ошибка, указывающая на то, что метод не реализован.
 var ErrNotImplemented = errors.New("not implemented")
 
+// URLStorage описывает интерфейс хранилища приложения.
 type URLStorage interface {
 	// Сохранить сокращенную ссылку
 	SaveURL(ctx context.Context, url string, userID int) (id string, err error)
@@ -42,20 +44,24 @@ type URLStorage interface {
 	Close() error
 }
 
+// ShortenURL описывает структуру представляющую пару оригинальной и сокращенной ссылок.
 type ShortenURL struct {
 	Original string
 	Shorten  string
 }
 
+// User описывает структуру данных пользователя.
 type User struct {
 	ID int
 }
 
+// URLStorageConfig описывает структуру конфигурации хранилища приложения.
 type URLStorageConfig struct {
 	StorageFile string
 	DSN         string
 }
 
+// NewURLStorage создает новое хранилище согласно переданным настройкам.
 func NewURLStorage(ctx context.Context, cfg URLStorageConfig) (URLStorage, error) {
 	if cfg.DSN != "" {
 		return NewURLPgStore(ctx, PgConfig{DSN: cfg.DSN})
