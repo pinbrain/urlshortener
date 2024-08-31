@@ -149,6 +149,8 @@ func (s *URLMapStore) CreateUser(_ context.Context) (*User, error) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	s.userMaxID++
+	userID := s.userMaxID
+	s.userStore[userID] = []string{}
 	return &User{ID: s.userMaxID}, nil
 }
 
