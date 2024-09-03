@@ -2,9 +2,139 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func TestGetURL(t *testing.T) {
+	ctx := context.Background()
+	store, err := NewURLMapStore(ctx, "")
+	require.NoError(t, err)
+	defer store.Close()
+
+	tests := []struct {
+		name      string
+		url       string
+		short     string
+		isDeleted bool
+		err       error
+	}{
+		{
+			name:      "получена валидная ссылка",
+			url:       "http://some.ru",
+			isDeleted: false,
+			err:       nil,
+		},
+		{
+			name:      "ссылка удалена",
+			url:       "http://some.ru",
+			isDeleted: true,
+			err:       ErrIsDeleted,
+		},
+		{
+			name:      "ссылка не найдена",
+			short:     "not_existing",
+			isDeleted: true,
+			err:       nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			short := tt.short
+			if tt.url != "" {
+				short, err = store.SaveURL(ctx, tt.url, 1)
+				require.NoError(t, err)
+			}
+			if tt.isDeleted {
+				err = store.DeleteUserURLs(1, []string{short})
+				require.NoError(t, err)
+			}
+			full, err := store.GetURL(ctx, short)
+			if tt.err == nil {
+				require.NoError(t, err)
+				assert.Equal(t, tt.url, full)
+			} else {
+				assert.Equal(t, tt.err, err)
+			}
+		})
+	}
+}
+
+func TestGetUser(t *testing.T) {
+	ctx := context.Background()
+	store, err := NewURLMapStore(ctx, "")
+	require.NoError(t, err)
+	defer store.Close()
+
+	tests := []struct {
+		name   string
+		userID int
+		create bool
+		err    error
+	}{
+		{
+			name:   "Данные пользователя получены",
+			create: true,
+			err:    nil,
+		},
+		{
+			name:   "Невалидный ID пользователя",
+			userID: -1,
+			create: false,
+			err:    errors.New("invalid user id"),
+		},
+		{
+			name:   "Пользователь не найден",
+			userID: 2,
+			create: false,
+			err:    ErrNoData,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			userID := tt.userID
+			if tt.create {
+				user, err := store.CreateUser(ctx)
+				require.NoError(t, err)
+				userID = user.ID
+			}
+			_, err = store.GetUser(ctx, userID)
+			if tt.err == nil {
+				require.NoError(t, err)
+			} else {
+				assert.Equal(t, tt.err, err)
+			}
+		})
+	}
+}
+
+func TestGetUserURLs(t *testing.T) {
+	ctx := context.Background()
+	store, err := NewURLMapStore(ctx, "")
+	require.NoError(t, err)
+	defer store.Close()
+
+	urls := []ShortenURL{
+		{
+			Original: "http://some1.ru",
+		},
+		{
+			Original: "http://some2.ru",
+		},
+	}
+
+	err = store.SaveBatchURL(ctx, urls, 1)
+	require.NoError(t, err)
+	userURLs, err := store.GetUserURLs(ctx, 1)
+	require.NoError(t, err)
+	assert.Equal(t, urls, userURLs)
+}
 
 func BenchmarkSaveURL(b *testing.B) {
 	ctx := context.Background()

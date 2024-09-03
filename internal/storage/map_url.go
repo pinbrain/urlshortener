@@ -18,9 +18,9 @@ import (
 type URLMapStore struct {
 	store     map[string]URLMapData
 	userStore map[int][]string
-	userMaxID int
-	mutex     sync.RWMutex
 	jsonDB    jsonDB
+	mutex     sync.RWMutex
+	userMaxID int
 }
 
 // jsonDB описывает структуру для записи и чтения данных из json файла.
@@ -111,7 +111,7 @@ func (s *URLMapStore) SaveURL(_ context.Context, url string, userID int) (string
 	return id, nil
 }
 
-// SaveURL сохраняет массив сокращенных ссылок.
+// SaveBatchURL сохраняет массив сокращенных ссылок.
 func (s *URLMapStore) SaveBatchURL(ctx context.Context, urls []ShortenURL, userID int) error {
 	for i, url := range urls {
 		urlID, err := s.SaveURL(ctx, url.Original, userID)
@@ -149,6 +149,8 @@ func (s *URLMapStore) CreateUser(_ context.Context) (*User, error) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	s.userMaxID++
+	userID := s.userMaxID
+	s.userStore[userID] = []string{}
 	return &User{ID: s.userMaxID}, nil
 }
 

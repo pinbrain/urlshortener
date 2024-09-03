@@ -24,7 +24,7 @@ type JWTClaims struct {
 	UserID               int // ID пользователя
 }
 
-// Константы для работы с jwt
+// Константы для работы с jwt.
 const (
 	JWTCookieName = "shortener_jwt"       // Название cookie в которой хранится jwt токен
 	jwtSecretKey  = "some_secret_jwt_key" // Ключ для подписи jwt токена

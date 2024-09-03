@@ -66,11 +66,9 @@ func ExampleURLHandler_HandleShortenBatchURL() {
 	request := httptest.NewRequest(http.MethodPost, "/api/shorten/batch", strings.NewReader(reqBody))
 	request.Header.Set("Content-Type", "application/json")
 
-	// Record the response
 	w := httptest.NewRecorder()
 	handler.HandleShortenBatchURL(w, request)
 
-	// Output the response
 	res := w.Result()
 	defer res.Body.Close()
 

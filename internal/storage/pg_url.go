@@ -29,8 +29,8 @@ type URLPgStore struct {
 
 // urlDelBatchData описывает структуру данных для массового удаления ссылок пользователя.
 type urlDelBatchData struct {
-	userID int
 	urls   []string
+	userID int
 }
 
 const (
@@ -193,7 +193,7 @@ func (db *URLPgStore) SaveURL(ctx context.Context, url string, userID int) (stri
 	return id, nil
 }
 
-// SaveURL сохраняет массив сокращенных ссылок.
+// SaveBatchURL сохраняет массив сокращенных ссылок.
 func (db *URLPgStore) SaveBatchURL(ctx context.Context, urls []ShortenURL, userID int) error {
 	// оставляем возможность сохранять url неавторизованными пользователями
 	var userIDValue interface{}
