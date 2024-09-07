@@ -17,6 +17,7 @@ type ServerConf struct {
 	LogLevel      string  `env:"LOG_LEVEL"`         // Уровень логирования.
 	StorageFile   string  `env:"FILE_STORAGE_PATH"` // Полное имя файла, куда сохраняются данные.
 	DSN           string  `env:"DATABASE_DSN"`      // Строка с адресом подключения к БД.
+	EnableHTTPS   bool    `env:"ENABLE_HTTPS"`      // Признак включения HTTPS
 }
 
 // validateBaseURL проверяет корректность базового адреса сокращенных ссылок.
@@ -44,6 +45,7 @@ func loadFlags(cfg *ServerConf) error {
 	flag.StringVar(&cfg.ServerAddress, "a", ":8080", "Адрес запуска HTTP-сервера")
 	flag.StringVar(&cfg.LogLevel, "l", "info", "Уровень логирования")
 	flag.StringVar(&cfg.DSN, "d", "", "Строка с адресом подключения к БД")
+	flag.BoolVar(&cfg.EnableHTTPS, "s", false, "Флаг включения HTTPS")
 	storageFileStr := flag.String("f", "/tmp/short-url-db.json", "Полное имя файла, куда сохраняются данные")
 	baseURLStr := flag.String("b", "http://localhost:8080", "Базовый адрес результирующего сокращённого URL")
 	flag.Parse()
