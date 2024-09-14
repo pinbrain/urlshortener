@@ -93,7 +93,7 @@ func loadEnvs(cfg *ServerConf) error {
 	return nil
 }
 
-// loadJSON загружает параметры конфигурации из файла json
+// loadJSON загружает параметры конфигурации из файла json.
 func loadJSON(cfg *ServerConf) error {
 	if cfg.JSONConfig == "" {
 		return nil

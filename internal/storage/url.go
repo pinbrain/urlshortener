@@ -62,9 +62,9 @@ type URLStorageConfig struct {
 }
 
 // NewURLStorage создает новое хранилище согласно переданным настройкам.
-func NewURLStorage(ctx context.Context, cfg URLStorageConfig) (URLStorage, error) {
+func NewURLStorage(cfg URLStorageConfig) (URLStorage, error) {
 	if cfg.DSN != "" {
-		return NewURLPgStore(ctx, PgConfig{DSN: cfg.DSN})
+		return NewURLPgStore(PgConfig{DSN: cfg.DSN})
 	}
-	return NewURLMapStore(ctx, cfg.StorageFile)
+	return NewURLMapStore(cfg.StorageFile)
 }

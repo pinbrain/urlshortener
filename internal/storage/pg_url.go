@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgerrcode"
@@ -25,6 +26,10 @@ type PgConfig struct {
 type URLPgStore struct {
 	pool     *pgxpool.Pool
 	urlDelCh chan urlDelBatchData
+
+	ctx       context.Context
+	ctxCancel context.CancelFunc
+	wg        sync.WaitGroup
 }
 
 // urlDelBatchData описывает структуру данных для массового удаления ссылок пользователя.
@@ -41,20 +46,23 @@ const (
 )
 
 // NewURLPgStore создает новое хранилище типа БД (postgresql)
-func NewURLPgStore(ctx context.Context, cfg PgConfig) (*URLPgStore, error) {
-	pool, err := initPool(ctx, cfg)
+func NewURLPgStore(cfg PgConfig) (*URLPgStore, error) {
+	var err error
+	store := &URLPgStore{
+		urlDelCh: make(chan urlDelBatchData, delURLsBatchSize),
+		wg:       sync.WaitGroup{},
+	}
+	store.ctx, store.ctxCancel = context.WithCancel(context.Background())
+	store.pool, err = initPool(store.ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize a db connection: %w", err)
 	}
-	if err = initSchema(ctx, pool); err != nil {
+	if err = initSchema(store.ctx, store.pool); err != nil {
 		return nil, fmt.Errorf("failed to initialize a db scheme: %w", err)
 	}
-	store := &URLPgStore{
-		pool:     pool,
-		urlDelCh: make(chan urlDelBatchData, delURLsBatchSize),
-	}
 
-	go store.flushDelURLs(ctx)
+	store.wg.Add(1)
+	go store.flushDelURLs()
 
 	return store, nil
 }
@@ -107,9 +115,10 @@ func initSchema(ctx context.Context, pool *pgxpool.Pool) error {
 // flushDelURLs go рутина, которая собирает ссылки на удаления и запускает функцию удаления из БД.
 // Удаление происходит либо когда количество ссылок на удаление превышает delURLsBatchSize.
 // Либо, даже если ссылок меньше delURLsBatchSize - каждые delURLBatchInterval секунд.
-func (db *URLPgStore) flushDelURLs(ctx context.Context) {
+func (db *URLPgStore) flushDelURLs() {
 	ticker := time.NewTicker(delURLBatchInterval * time.Second)
 	defer ticker.Stop()
+	defer db.wg.Done()
 
 	var batch []urlDelBatchData
 
@@ -118,23 +127,24 @@ func (db *URLPgStore) flushDelURLs(ctx context.Context) {
 		case delURLs, ok := <-db.urlDelCh:
 			if !ok {
 				if len(batch) > 0 {
-					db.executeDelBatch(ctx, batch)
+					db.executeDelBatch(db.ctx, batch)
 					return
 				}
 			}
 			batch = append(batch, delURLs)
 			if len(batch) >= delURLsBatchSize {
-				db.executeDelBatch(ctx, batch)
+				db.executeDelBatch(db.ctx, batch)
 				batch = batch[:0]
 			}
 		case <-ticker.C:
 			if len(batch) > 0 {
-				db.executeDelBatch(ctx, batch)
+				db.executeDelBatch(db.ctx, batch)
 				batch = batch[:0]
 			}
-		case <-ctx.Done():
+		case <-db.ctx.Done():
 			if len(batch) > 0 {
-				db.executeDelBatch(ctx, batch)
+				logger.Log.Debug("Executing deletion while closing pg store...")
+				db.executeDelBatch(db.ctx, batch)
 			}
 			return
 		}
@@ -325,7 +335,10 @@ func (db *URLPgStore) Ping(ctx context.Context) error {
 
 // Close закрывает пулл и все соединения с БД.
 func (db *URLPgStore) Close() error {
-	db.pool.Close()
+	logger.Log.Debug("Closing pg store...")
+	db.ctxCancel()
 	close(db.urlDelCh)
+	db.wg.Wait()
+	db.pool.Close()
 	return nil
 }

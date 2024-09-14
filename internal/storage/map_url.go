@@ -21,6 +21,10 @@ type URLMapStore struct {
 	jsonDB    jsonDB
 	mutex     sync.RWMutex
 	userMaxID int
+
+	wg        sync.WaitGroup
+	ctx       context.Context
+	ctxCancel context.CancelFunc
 }
 
 // jsonDB описывает структуру для записи и чтения данных из json файла.
@@ -50,11 +54,14 @@ const syncFileInterval = 30 // Интервал синхронизации да�
 
 // NewURLMapStore создает новое хранилище в памяти согласно конфигурации.
 // При соответствующих настройках так же будет добавлена поддержка данных в json файле.
-func NewURLMapStore(ctx context.Context, storageFile string) (*URLMapStore, error) {
+func NewURLMapStore(storageFile string) (*URLMapStore, error) {
 	urlMapStore := &URLMapStore{
 		store:     make(map[string]URLMapData),
 		userStore: make(map[int][]string),
+		wg:        sync.WaitGroup{},
 	}
+
+	urlMapStore.ctx, urlMapStore.ctxCancel = context.WithCancel(context.Background())
 
 	if storageFile != "" {
 		jsonDBFile, err := os.OpenFile(storageFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
@@ -87,7 +94,8 @@ func NewURLMapStore(ctx context.Context, storageFile string) (*URLMapStore, erro
 			}
 		}
 
-		go urlMapStore.syncFileData(ctx)
+		urlMapStore.wg.Add(1)
+		go urlMapStore.syncFileData()
 	}
 
 	return urlMapStore, nil
@@ -264,9 +272,10 @@ func (s *URLMapStore) processSyncFileData() error {
 
 // syncFileData - go рутина запускающая синхронизацию данных в памяти в json файле.
 // Запускает синхронизацию каждые syncFileInterval секунд.
-func (s *URLMapStore) syncFileData(ctx context.Context) {
+func (s *URLMapStore) syncFileData() {
 	ticker := time.NewTicker(syncFileInterval * time.Second)
 	defer ticker.Stop()
+	defer s.wg.Done()
 
 	for {
 		select {
@@ -276,7 +285,8 @@ func (s *URLMapStore) syncFileData(ctx context.Context) {
 					logger.Log.Errorw("failed to sync file data", "err", err)
 				}
 			}
-		case <-ctx.Done():
+		case <-s.ctx.Done():
+			logger.Log.Debug("Sync file data while closing url map store...")
 			if err := s.processSyncFileData(); err != nil {
 				logger.Log.Errorw("failed to sync file data", "err", err)
 			}
@@ -290,8 +300,11 @@ func (s *URLMapStore) Ping(_ context.Context) error {
 	return nil
 }
 
-// Close закрывает файл.
+// Close закрывает контекст и файл.
 func (s *URLMapStore) Close() error {
+	logger.Log.Debug("Closing url map store...")
+	s.ctxCancel()
+	s.wg.Wait()
 	if s.jsonDB.file != nil {
 		return s.jsonDB.file.Close()
 	}

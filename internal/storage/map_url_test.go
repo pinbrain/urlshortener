@@ -12,7 +12,7 @@ import (
 
 func TestGetURL(t *testing.T) {
 	ctx := context.Background()
-	store, err := NewURLMapStore(ctx, "")
+	store, err := NewURLMapStore("")
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -67,7 +67,7 @@ func TestGetURL(t *testing.T) {
 
 func TestGetUser(t *testing.T) {
 	ctx := context.Background()
-	store, err := NewURLMapStore(ctx, "")
+	store, err := NewURLMapStore("")
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -116,7 +116,7 @@ func TestGetUser(t *testing.T) {
 
 func TestGetUserURLs(t *testing.T) {
 	ctx := context.Background()
-	store, err := NewURLMapStore(ctx, "")
+	store, err := NewURLMapStore("")
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -145,7 +145,7 @@ func BenchmarkSaveURL(b *testing.B) {
 	}
 	defer os.Remove(tmpFile.Name())
 
-	store, err := NewURLMapStore(ctx, tmpFile.Name())
+	store, err := NewURLMapStore(tmpFile.Name())
 	if err != nil {
 		b.Fatalf("failed to create store: %v", err)
 	}
@@ -171,7 +171,7 @@ func BenchmarkSaveBatchURL(b *testing.B) {
 	}
 	defer os.Remove(tmpFile.Name())
 
-	store, err := NewURLMapStore(ctx, tmpFile.Name())
+	store, err := NewURLMapStore(tmpFile.Name())
 	if err != nil {
 		b.Fatalf("failed to create store: %v", err)
 	}
@@ -201,7 +201,7 @@ func BenchmarkGetURL(b *testing.B) {
 	}
 	defer os.Remove(tmpFile.Name())
 
-	store, err := NewURLMapStore(ctx, tmpFile.Name())
+	store, err := NewURLMapStore(tmpFile.Name())
 	if err != nil {
 		b.Fatalf("failed to create store: %v", err)
 	}
@@ -233,7 +233,7 @@ func BenchmarkDeleteUserURLs(b *testing.B) {
 	}
 	defer os.Remove(tmpFile.Name())
 
-	store, err := NewURLMapStore(ctx, tmpFile.Name())
+	store, err := NewURLMapStore(tmpFile.Name())
 	if err != nil {
 		b.Fatalf("failed to create store: %v", err)
 	}
