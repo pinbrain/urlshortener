@@ -19,12 +19,12 @@ func TestValidateBaseURL(t *testing.T) {
 }
 
 func TestValidateStorageFileName(t *testing.T) {
-	err := validateStorageFileName("valid.json")
+	err := validateFileName("valid.json")
 	if err != nil {
 		t.Errorf("Expected no error validating file name, got: %v", err)
 	}
 
-	err = validateStorageFileName("..")
+	err = validateFileName("..")
 	assert.Error(t, err)
 }
 
