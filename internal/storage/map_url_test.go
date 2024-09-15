@@ -142,7 +142,6 @@ func TestGetUserURLs(t *testing.T) {
 func TestProcessSyncFileData(t *testing.T) {
 	tmpFile, err := os.CreateTemp("", "jsonDB_*.json")
 	require.NoError(t, err)
-	defer os.Remove(tmpFile.Name())
 
 	store := &URLMapStore{
 		store: map[string]URLMapData{
@@ -175,7 +174,6 @@ func TestNewURLMapStore(t *testing.T) {
 	tmpFile, err := os.CreateTemp("", "jsonDB_*.json")
 	fmt.Println(tmpFile.Name())
 	require.NoError(t, err)
-	defer os.Remove(tmpFile.Name())
 
 	records := []URLMapFileRecord{
 		{
