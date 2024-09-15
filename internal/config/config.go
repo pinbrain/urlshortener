@@ -23,6 +23,7 @@ type ServerConf struct {
 	JSONConfig    string  `env:"CONFIG" json:"-"`                            // Имя файла json с конфигурацией
 }
 
+// JSONServerConf определяет структуру файла конфигурации json.
 type JSONServerConf struct {
 	ServerConf
 	BaseURL string `json:"base_url"`
