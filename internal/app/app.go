@@ -39,10 +39,10 @@ func Run() error {
 	// происходит, если после завершения контекста
 	// приложение не смогло завершиться за отведенный промежуток времени
 	context.AfterFunc(ctx, func() {
-		ctx, cancelCtx := context.WithTimeout(context.Background(), timeoutShutdown)
-		defer cancelCtx()
+		afterCtx, afterCancelCtx := context.WithTimeout(context.Background(), timeoutShutdown)
+		defer afterCancelCtx()
 
-		<-ctx.Done()
+		<-afterCtx.Done()
 		log.Fatal("failed to gracefully shutdown the service")
 	})
 
@@ -124,7 +124,7 @@ func Run() error {
 		shutdownTimeoutCtx, cancelShutdownTimeoutCtx := context.WithTimeout(context.Background(), timeoutServerShutdown)
 		defer cancelShutdownTimeoutCtx()
 
-		if err := server.Shutdown(shutdownTimeoutCtx); err != nil {
+		if err = server.Shutdown(shutdownTimeoutCtx); err != nil {
 			logger.Log.Errorf("an error occurred during server shutdown: %v", err)
 		}
 		logger.Log.Info("HTTP server stopped")
@@ -135,29 +135,9 @@ func Run() error {
 		return nil
 	})
 
-	if err := g.Wait(); err != nil {
+	if err = g.Wait(); err != nil {
 		return err
 	}
 
 	return nil
-
-	// if serverConf.EnableHTTPS {
-	// 	manager := &autocert.Manager{
-	// 		// директория для хранения сертификатов
-	// 		Cache: autocert.DirCache("cache-dir"),
-	// 		// функция, принимающая Terms of Service издателя сертификатов
-	// 		Prompt: autocert.AcceptTOS,
-	// 		// перечень доменов, для которых будут поддерживаться сертификаты
-	// 		HostPolicy: autocert.HostWhitelist("mysite.ru"),
-	// 	}
-	// 	// конструируем сервер с поддержкой TLS
-	// 	server := &http.Server{
-	// 		Addr:    ":443",
-	// 		Handler: handlers.NewURLRouter(urlHandler, urlStore),
-	// 		// для TLS-конфигурации используем менеджер сертификатов
-	// 		TLSConfig: manager.TLSConfig(),
-	// 	}
-	// 	return server.ListenAndServeTLS("", "")
-	// }
-	// return http.ListenAndServe(serverConf.ServerAddress, handlers.NewURLRouter(urlHandler, urlStore))
 }

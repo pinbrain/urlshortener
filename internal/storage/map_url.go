@@ -251,9 +251,11 @@ func (s *URLMapStore) processSyncFileData() error {
 		}
 		tmpIsClosed = true
 		if err = s.jsonDB.file.Close(); err != nil {
+			os.Remove(tmpFile.Name())
 			return fmt.Errorf("failed to close the original file: %w", err)
 		}
 		if err = os.Rename(tmpFile.Name(), s.jsonDB.file.Name()); err != nil {
+			os.Remove(tmpFile.Name())
 			return fmt.Errorf("failed to replace the original file: %w", err)
 		}
 

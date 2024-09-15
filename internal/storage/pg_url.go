@@ -22,9 +22,19 @@ type PgConfig struct {
 	DSN string
 }
 
+type PgxPoolI interface {
+	Begin(context.Context) (pgx.Tx, error)
+	Close()
+	SendBatch(ctx context.Context, b *pgx.Batch) pgx.BatchResults
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	Ping(ctx context.Context) error
+}
+
 // URLPgStore описывает структуру хранилища БД.
 type URLPgStore struct {
-	pool     *pgxpool.Pool
+	pool     PgxPoolI
 	urlDelCh chan urlDelBatchData
 
 	ctx       context.Context
@@ -45,7 +55,7 @@ const (
 	delURLBatchInterval = 10
 )
 
-// NewURLPgStore создает новое хранилище типа БД (postgresql)
+// NewURLPgStore создает новое хранилище типа БД (postgresql).
 func NewURLPgStore(cfg PgConfig) (*URLPgStore, error) {
 	var err error
 	store := &URLPgStore{
@@ -84,7 +94,7 @@ func initPool(ctx context.Context, cfg PgConfig) (*pgxpool.Pool, error) {
 }
 
 // initSchema выполняет миграцию (создание таблиц).
-func initSchema(ctx context.Context, pool *pgxpool.Pool) error {
+func initSchema(ctx context.Context, pool PgxPoolI) error {
 	tx, err := pool.Begin(ctx)
 	if err != nil {
 		return err

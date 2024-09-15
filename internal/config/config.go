@@ -15,12 +15,17 @@ import (
 // ServerConf определяет структуру конфигурации.
 type ServerConf struct {
 	ServerAddress string  `env:"SERVER_ADDRESS" json:"server_address"`       // Адрес запуска HTTP-сервера.
-	BaseURL       url.URL `env:"BASE_URL" json:"base_url"`                   // Базовый адрес сокращённого URL.
+	BaseURL       url.URL `env:"BASE_URL" json:"-"`                          // Базовый адрес сокращённого URL.
 	LogLevel      string  `env:"LOG_LEVEL" json:"-"`                         // Уровень логирования.
 	StorageFile   string  `env:"FILE_STORAGE_PATH" json:"file_storage_path"` // Полное имя файла, куда сохраняются данные.
 	DSN           string  `env:"DATABASE_DSN" json:"database_dsn"`           // Строка с адресом подключения к БД.
 	EnableHTTPS   bool    `env:"ENABLE_HTTPS" json:"enable_https"`           // Признак включения HTTPS
 	JSONConfig    string  `env:"CONFIG" json:"-"`                            // Имя файла json с конфигурацией
+}
+
+type JSONServerConf struct {
+	ServerConf
+	BaseURL string `json:"base_url"`
 }
 
 // validateBaseURL проверяет корректность базового адреса сокращенных ссылок.
@@ -103,13 +108,17 @@ func loadJSON(cfg *ServerConf) error {
 	if err != nil {
 		return err
 	}
-	jsonCfg := &ServerConf{}
+	jsonCfg := &JSONServerConf{}
 	if err = json.Unmarshal(data, jsonCfg); err != nil {
 		return err
 	}
 
-	if cfg.BaseURL.String() == "" {
-		cfg.BaseURL = jsonCfg.BaseURL
+	if cfg.BaseURL.String() == "" && jsonCfg.BaseURL != "" {
+		parsedURL, err := validateBaseURL(jsonCfg.BaseURL)
+		if err != nil {
+			return err
+		}
+		cfg.BaseURL = *parsedURL
 	}
 	if cfg.DSN == "" {
 		cfg.DSN = jsonCfg.DSN
