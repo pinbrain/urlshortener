@@ -22,6 +22,7 @@ type PgConfig struct {
 	DSN string
 }
 
+// PgxPoolI описывает интерфейс Pool postgresql. Совместим с моком для тестов.
 type PgxPoolI interface {
 	Begin(context.Context) (pgx.Tx, error)
 	Close()
