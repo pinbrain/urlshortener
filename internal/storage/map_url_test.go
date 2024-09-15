@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"sync"
 	"testing"
@@ -140,7 +139,7 @@ func TestGetUserURLs(t *testing.T) {
 }
 
 func TestProcessSyncFileData(t *testing.T) {
-	tmpFile, err := os.CreateTemp("", "jsonDB_*.json")
+	tmpFile, err := os.CreateTemp(".", "jsonDB_*.json")
 	require.NoError(t, err)
 
 	store := &URLMapStore{
@@ -171,8 +170,7 @@ func TestProcessSyncFileData(t *testing.T) {
 }
 
 func TestNewURLMapStore(t *testing.T) {
-	tmpFile, err := os.CreateTemp("", "jsonDB_*.json")
-	fmt.Println(tmpFile.Name())
+	tmpFile, err := os.CreateTemp(".", "jsonDB_*.json")
 	require.NoError(t, err)
 
 	records := []URLMapFileRecord{
@@ -198,7 +196,6 @@ func TestNewURLMapStore(t *testing.T) {
 
 	store, err := NewURLMapStore(tmpFile.Name())
 	require.NoError(t, err)
-	defer require.NoError(t, store.Close())
 
 	require.Len(t, store.store, 2)
 	require.Equal(t, "http://example1.com", store.store["short1"].OriginalURL)
@@ -210,7 +207,7 @@ func TestNewURLMapStore(t *testing.T) {
 	require.Contains(t, store.userStore[2], "short2")
 
 	require.Equal(t, 2, store.userMaxID)
-
+	require.NoError(t, store.Close())
 	require.NoError(t, os.Remove(tmpFile.Name()))
 }
 
