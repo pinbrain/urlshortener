@@ -129,6 +129,9 @@ func Run() error {
 		}
 		logger.Log.Info("HTTP server stopped")
 
+		urlHandler.Close()
+		logger.Log.Info("Handler goroutines finished")
+
 		urlStore.Close()
 		logger.Log.Info("URL store closed")
 
