@@ -2,8 +2,10 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,7 +14,7 @@ import (
 
 func TestGetURL(t *testing.T) {
 	ctx := context.Background()
-	store, err := NewURLMapStore(ctx, "")
+	store, err := NewURLMapStore("")
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -67,7 +69,7 @@ func TestGetURL(t *testing.T) {
 
 func TestGetUser(t *testing.T) {
 	ctx := context.Background()
-	store, err := NewURLMapStore(ctx, "")
+	store, err := NewURLMapStore("")
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -116,7 +118,7 @@ func TestGetUser(t *testing.T) {
 
 func TestGetUserURLs(t *testing.T) {
 	ctx := context.Background()
-	store, err := NewURLMapStore(ctx, "")
+	store, err := NewURLMapStore("")
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -136,6 +138,79 @@ func TestGetUserURLs(t *testing.T) {
 	assert.Equal(t, urls, userURLs)
 }
 
+func TestProcessSyncFileData(t *testing.T) {
+	tmpFile, err := os.CreateTemp(".", "jsonDB_*.json")
+	require.NoError(t, err)
+
+	store := &URLMapStore{
+		store: map[string]URLMapData{
+			"short1": {OriginalURL: "http://example1.com", UserID: 1, IsDeleted: false},
+			"short2": {OriginalURL: "http://example2.com", UserID: 2, IsDeleted: false},
+		},
+		jsonDB: jsonDB{
+			file:    tmpFile,
+			encoder: json.NewEncoder(tmpFile),
+			decoder: json.NewDecoder(tmpFile),
+		},
+		mutex: sync.RWMutex{},
+	}
+
+	err = store.processSyncFileData()
+	require.NoError(t, err)
+
+	fileData, err := os.ReadFile(tmpFile.Name())
+	require.NoError(t, err)
+	require.Contains(t, string(fileData), `"original_url":"http://example1.com","short_url":"short1"`)
+	require.Contains(t, string(fileData), `"original_url":"http://example2.com","short_url":"short2"`)
+
+	store.jsonDB.file.Close()
+	require.NoError(t, os.Remove(tmpFile.Name()))
+	err = store.processSyncFileData()
+	require.Error(t, err)
+}
+
+func TestNewURLMapStore(t *testing.T) {
+	tmpFile, err := os.CreateTemp(".", "jsonDB_*.json")
+	require.NoError(t, err)
+
+	records := []URLMapFileRecord{
+		{
+			OriginalURL: "http://example1.com",
+			ShortURL:    "short1",
+			UserID:      1,
+			IsDeleted:   false,
+		},
+		{
+			OriginalURL: "http://example2.com",
+			ShortURL:    "short2",
+			UserID:      2,
+			IsDeleted:   false,
+		},
+	}
+	for _, record := range records {
+		err = json.NewEncoder(tmpFile).Encode(record)
+		require.NoError(t, err)
+	}
+
+	require.NoError(t, tmpFile.Close())
+
+	store, err := NewURLMapStore(tmpFile.Name())
+	require.NoError(t, err)
+
+	require.Len(t, store.store, 2)
+	require.Equal(t, "http://example1.com", store.store["short1"].OriginalURL)
+	require.Equal(t, "http://example2.com", store.store["short2"].OriginalURL)
+
+	require.Len(t, store.userStore[1], 1)
+	require.Len(t, store.userStore[2], 1)
+	require.Contains(t, store.userStore[1], "short1")
+	require.Contains(t, store.userStore[2], "short2")
+
+	require.Equal(t, 2, store.userMaxID)
+	require.NoError(t, store.Close())
+	require.NoError(t, os.Remove(tmpFile.Name()))
+}
+
 func BenchmarkSaveURL(b *testing.B) {
 	ctx := context.Background()
 
@@ -145,7 +220,7 @@ func BenchmarkSaveURL(b *testing.B) {
 	}
 	defer os.Remove(tmpFile.Name())
 
-	store, err := NewURLMapStore(ctx, tmpFile.Name())
+	store, err := NewURLMapStore(tmpFile.Name())
 	if err != nil {
 		b.Fatalf("failed to create store: %v", err)
 	}
@@ -171,7 +246,7 @@ func BenchmarkSaveBatchURL(b *testing.B) {
 	}
 	defer os.Remove(tmpFile.Name())
 
-	store, err := NewURLMapStore(ctx, tmpFile.Name())
+	store, err := NewURLMapStore(tmpFile.Name())
 	if err != nil {
 		b.Fatalf("failed to create store: %v", err)
 	}
@@ -201,7 +276,7 @@ func BenchmarkGetURL(b *testing.B) {
 	}
 	defer os.Remove(tmpFile.Name())
 
-	store, err := NewURLMapStore(ctx, tmpFile.Name())
+	store, err := NewURLMapStore(tmpFile.Name())
 	if err != nil {
 		b.Fatalf("failed to create store: %v", err)
 	}
@@ -233,7 +308,7 @@ func BenchmarkDeleteUserURLs(b *testing.B) {
 	}
 	defer os.Remove(tmpFile.Name())
 
-	store, err := NewURLMapStore(ctx, tmpFile.Name())
+	store, err := NewURLMapStore(tmpFile.Name())
 	if err != nil {
 		b.Fatalf("failed to create store: %v", err)
 	}

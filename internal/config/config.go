@@ -2,9 +2,11 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"net/url"
+	"os"
 	"path/filepath"
 
 	"github.com/caarlos0/env/v11"
@@ -12,11 +14,19 @@ import (
 
 // ServerConf определяет структуру конфигурации.
 type ServerConf struct {
-	ServerAddress string  `env:"SERVER_ADDRESS"`    // Адрес запуска HTTP-сервера.
-	BaseURL       url.URL `env:"BASE_URL"`          // Базовый адрес результирующего сокращённого URL.
-	LogLevel      string  `env:"LOG_LEVEL"`         // Уровень логирования.
-	StorageFile   string  `env:"FILE_STORAGE_PATH"` // Полное имя файла, куда сохраняются данные.
-	DSN           string  `env:"DATABASE_DSN"`      // Строка с адресом подключения к БД.
+	ServerAddress string  `env:"SERVER_ADDRESS" json:"server_address"`       // Адрес запуска HTTP-сервера.
+	BaseURL       url.URL `env:"BASE_URL" json:"-"`                          // Базовый адрес сокращённого URL.
+	LogLevel      string  `env:"LOG_LEVEL" json:"-"`                         // Уровень логирования.
+	StorageFile   string  `env:"FILE_STORAGE_PATH" json:"file_storage_path"` // Полное имя файла, куда сохраняются данные.
+	DSN           string  `env:"DATABASE_DSN" json:"database_dsn"`           // Строка с адресом подключения к БД.
+	EnableHTTPS   bool    `env:"ENABLE_HTTPS" json:"enable_https"`           // Признак включения HTTPS
+	JSONConfig    string  `env:"CONFIG" json:"-"`                            // Имя файла json с конфигурацией
+}
+
+// JSONServerConf определяет структуру файла конфигурации json.
+type JSONServerConf struct {
+	ServerConf
+	BaseURL string `json:"base_url"`
 }
 
 // validateBaseURL проверяет корректность базового адреса сокращенных ссылок.
@@ -28,8 +38,8 @@ func validateBaseURL(baseURL string) (*url.URL, error) {
 	return parsedURL, nil
 }
 
-// validateStorageFileName проверяет корректность имени файла для хранение данных.
-func validateStorageFileName(file string) error {
+// validateFileName проверяет корректность имени файла для хранение данных.
+func validateFileName(file string) error {
 	if file == "" {
 		return nil
 	}
@@ -44,8 +54,10 @@ func loadFlags(cfg *ServerConf) error {
 	flag.StringVar(&cfg.ServerAddress, "a", ":8080", "Адрес запуска HTTP-сервера")
 	flag.StringVar(&cfg.LogLevel, "l", "info", "Уровень логирования")
 	flag.StringVar(&cfg.DSN, "d", "", "Строка с адресом подключения к БД")
+	flag.BoolVar(&cfg.EnableHTTPS, "s", false, "Флаг включения HTTPS")
 	storageFileStr := flag.String("f", "/tmp/short-url-db.json", "Полное имя файла, куда сохраняются данные")
 	baseURLStr := flag.String("b", "http://localhost:8080", "Базовый адрес результирующего сокращённого URL")
+	configFileStr := flag.String("c", "", "Имя файла json с конфигурацией приложения")
 	flag.Parse()
 
 	if *baseURLStr != "" {
@@ -56,10 +68,15 @@ func loadFlags(cfg *ServerConf) error {
 		cfg.BaseURL = *parsedURL
 	}
 
-	if err := validateStorageFileName(*storageFileStr); err != nil {
+	if err := validateFileName(*storageFileStr); err != nil {
 		return err
 	}
 	cfg.StorageFile = *storageFileStr
+
+	if err := validateFileName(*configFileStr); err != nil {
+		return err
+	}
+	cfg.JSONConfig = *configFileStr
 
 	return nil
 }
@@ -71,8 +88,50 @@ func loadEnvs(cfg *ServerConf) error {
 		return err
 	}
 
-	if err = validateStorageFileName(cfg.StorageFile); err != nil {
+	if err = validateFileName(cfg.StorageFile); err != nil {
 		return err
+	}
+
+	if err = validateFileName(cfg.JSONConfig); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// loadJSON загружает параметры конфигурации из файла json.
+func loadJSON(cfg *ServerConf) error {
+	if cfg.JSONConfig == "" {
+		return nil
+	}
+
+	data, err := os.ReadFile(cfg.JSONConfig)
+	if err != nil {
+		return err
+	}
+	jsonCfg := &JSONServerConf{}
+	if err = json.Unmarshal(data, jsonCfg); err != nil {
+		return err
+	}
+
+	if cfg.BaseURL.String() == "" && jsonCfg.BaseURL != "" {
+		parsedURL, err := validateBaseURL(jsonCfg.BaseURL)
+		if err != nil {
+			return err
+		}
+		cfg.BaseURL = *parsedURL
+	}
+	if cfg.DSN == "" {
+		cfg.DSN = jsonCfg.DSN
+	}
+	if cfg.ServerAddress == "" {
+		cfg.ServerAddress = jsonCfg.ServerAddress
+	}
+	if cfg.StorageFile == "" {
+		cfg.StorageFile = jsonCfg.StorageFile
+	}
+	if !cfg.EnableHTTPS {
+		cfg.EnableHTTPS = jsonCfg.EnableHTTPS
 	}
 
 	return nil
@@ -86,6 +145,9 @@ func InitConfig() (ServerConf, error) {
 		return serverConf, err
 	}
 	if err := loadEnvs(&serverConf); err != nil {
+		return serverConf, err
+	}
+	if err := loadJSON(&serverConf); err != nil {
 		return serverConf, err
 	}
 

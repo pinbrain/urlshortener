@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 
@@ -20,6 +21,7 @@ import (
 type URLHandler struct {
 	urlStore storage.URLStorage // Хранилище приложения
 	baseURL  *url.URL           // Базовый url сокращаемых ссылок
+	wg       *sync.WaitGroup    // Waiting group для go рутин хендлера
 }
 
 // shortenRequest определяет формат запроса на сокращение ссылки.
@@ -55,6 +57,7 @@ func NewURLHandler(urlStore storage.URLStorage, baseURL url.URL) URLHandler {
 	return URLHandler{
 		urlStore: urlStore,
 		baseURL:  &baseURL,
+		wg:       &sync.WaitGroup{},
 	}
 }
 
@@ -260,7 +263,10 @@ func (h *URLHandler) HandleDeleteUserURLs(w http.ResponseWriter, r *http.Request
 		http.Error(w, "Отсутствуют данные для удаления", http.StatusBadRequest)
 		return
 	}
+
+	h.wg.Add(1)
 	go func() {
+		defer h.wg.Done()
 		h.urlStore.DeleteUserURLs(user.ID, req)
 	}()
 	w.WriteHeader(http.StatusAccepted)
@@ -296,4 +302,10 @@ func (h *URLHandler) HandlePing(w http.ResponseWriter, r *http.Request) {
 		logger.Log.Errorw("Error trying to ping db", "err", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
+}
+
+// Close дожидается завершения всех goroutines хэндлера.
+func (h *URLHandler) Close() {
+	logger.Log.Debug("Waiting handler goroutines to finish")
+	h.wg.Wait()
 }

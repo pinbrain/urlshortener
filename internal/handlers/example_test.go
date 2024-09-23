@@ -20,7 +20,7 @@ func ExampleURLHandler_HandleJSONShortenURL() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	mockStorage, err := storage.NewURLStorage(context.Background(), storage.URLStorageConfig{})
+	mockStorage, err := storage.NewURLStorage(storage.URLStorageConfig{})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func ExampleURLHandler_HandleShortenBatchURL() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	mockStorage, err := storage.NewURLStorage(context.Background(), storage.URLStorageConfig{})
+	mockStorage, err := storage.NewURLStorage(storage.URLStorageConfig{})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func ExampleURLHandler_HandleRedirect() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	mockStorage, err := storage.NewURLStorage(context.Background(), storage.URLStorageConfig{})
+	mockStorage, err := storage.NewURLStorage(storage.URLStorageConfig{})
 	if err != nil {
 		log.Fatal(err)
 	}
