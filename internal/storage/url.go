@@ -40,6 +40,10 @@ type URLStorage interface {
 	IsValidID(id string) bool
 	// Проверка связи с БД (для всех остальных хранилищ ничего не делает)
 	Ping(ctx context.Context) error
+	// Получить количество ссылок в хранилище.
+	GetURLsCount(ctx context.Context) (count int, err error)
+	// Получить количество пользователей в хранилище.
+	GetUsersCount(ctx context.Context) (count int, err error)
 	// Закрыть хранилище (БД или файл)
 	Close() error
 }
