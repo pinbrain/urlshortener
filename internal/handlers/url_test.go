@@ -540,7 +540,7 @@ func TestURLHandler_HandleGetUsersURLs(t *testing.T) {
 	mockStorage := mocks.NewMockURLStorage(ctrl)
 
 	urlHandler := NewURLHandler(mockStorage, url.URL{Scheme: "http", Host: "localhost:8080"})
-	router := NewURLRouter(urlHandler, mockStorage)
+	router := NewURLRouter(urlHandler, mockStorage, nil)
 
 	user := &storage.User{ID: 1}
 	jwtString, err := middleware.BuildJWTString(user.ID)
@@ -634,7 +634,7 @@ func TestURLHandler_HandleDeleteUserURLs(t *testing.T) {
 	mockStorage := mocks.NewMockURLStorage(ctrl)
 
 	urlHandler := NewURLHandler(mockStorage, url.URL{Scheme: "http", Host: "localhost:8080"})
-	router := NewURLRouter(urlHandler, mockStorage)
+	router := NewURLRouter(urlHandler, mockStorage, nil)
 
 	user := &storage.User{ID: 1}
 	jwtString, err := middleware.BuildJWTString(user.ID)

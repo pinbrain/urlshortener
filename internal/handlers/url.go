@@ -52,6 +52,11 @@ type userURLResponse struct {
 	ShortURL    string `json:"short_url"`    // Сокращенная ссылка
 }
 
+type statsResponse struct {
+	URLs  int `json:"urls"`  // количество сокращённых URL в сервисе
+	Users int `json:"users"` // количество пользователей в сервисе
+}
+
 // NewURLHandler создает и возвращает новый обработчик запросов.
 func NewURLHandler(urlStore storage.URLStorage, baseURL url.URL) URLHandler {
 	return URLHandler{
@@ -301,6 +306,28 @@ func (h *URLHandler) HandlePing(w http.ResponseWriter, r *http.Request) {
 	if err := h.urlStore.Ping(r.Context()); err != nil {
 		logger.Log.Errorw("Error trying to ping db", "err", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
+}
+
+// HandleGetStats обрабатывает запрос на получение статистики хранилища.
+func (h *URLHandler) HandleGetStats(w http.ResponseWriter, r *http.Request) {
+	var err error
+	stats := statsResponse{}
+	stats.URLs, err = h.urlStore.GetURLsCount(r.Context())
+	if err != nil {
+		logger.Log.Errorw("Error trying to get urls count", "err", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
+	stats.Users, err = h.urlStore.GetUsersCount(r.Context())
+	if err != nil {
+		logger.Log.Errorw("Error trying to get users count", "err", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	enc := json.NewEncoder(w)
+	if err = enc.Encode(stats); err != nil {
+		logger.Log.Errorw("Error in encoding stats response to json", "err", err)
 	}
 }
 

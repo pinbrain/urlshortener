@@ -89,7 +89,7 @@ func Run() error {
 			// конструируем сервер с поддержкой TLS
 			server = &http.Server{
 				Addr:    ":443",
-				Handler: handlers.NewURLRouter(urlHandler, urlStore),
+				Handler: handlers.NewURLRouter(urlHandler, urlStore, serverConf.TrustedSubnet),
 				// для TLS-конфигурации используем менеджер сертификатов
 				TLSConfig: manager.TLSConfig(),
 			}
@@ -103,7 +103,7 @@ func Run() error {
 		}
 		server = &http.Server{
 			Addr:    serverConf.ServerAddress,
-			Handler: handlers.NewURLRouter(urlHandler, urlStore),
+			Handler: handlers.NewURLRouter(urlHandler, urlStore, serverConf.TrustedSubnet),
 		}
 		if err = server.ListenAndServe(); err != nil {
 			if errors.Is(err, http.ErrServerClosed) {

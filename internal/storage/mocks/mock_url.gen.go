@@ -9,7 +9,6 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-
 	storage "github.com/pinbrain/urlshortener/internal/storage"
 )
 
@@ -94,6 +93,21 @@ func (mr *MockURLStorageMockRecorder) GetURL(ctx, id interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetURL", reflect.TypeOf((*MockURLStorage)(nil).GetURL), ctx, id)
 }
 
+// GetURLsCount mocks base method.
+func (m *MockURLStorage) GetURLsCount(ctx context.Context) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetURLsCount", ctx)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetURLsCount indicates an expected call of GetURLsCount.
+func (mr *MockURLStorageMockRecorder) GetURLsCount(ctx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetURLsCount", reflect.TypeOf((*MockURLStorage)(nil).GetURLsCount), ctx)
+}
+
 // GetUser mocks base method.
 func (m *MockURLStorage) GetUser(ctx context.Context, id int) (*storage.User, error) {
 	m.ctrl.T.Helper()
@@ -122,6 +136,21 @@ func (m *MockURLStorage) GetUserURLs(ctx context.Context, id int) ([]storage.Sho
 func (mr *MockURLStorageMockRecorder) GetUserURLs(ctx, id interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserURLs", reflect.TypeOf((*MockURLStorage)(nil).GetUserURLs), ctx, id)
+}
+
+// GetUsersCount mocks base method.
+func (m *MockURLStorage) GetUsersCount(ctx context.Context) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUsersCount", ctx)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUsersCount indicates an expected call of GetUsersCount.
+func (mr *MockURLStorageMockRecorder) GetUsersCount(ctx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUsersCount", reflect.TypeOf((*MockURLStorage)(nil).GetUsersCount), ctx)
 }
 
 // IsValidID mocks base method.
