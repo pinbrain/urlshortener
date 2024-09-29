@@ -6,17 +6,21 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/pinbrain/urlshortener/internal/config"
+	grpcserver "github.com/pinbrain/urlshortener/internal/grpc_server"
 	"github.com/pinbrain/urlshortener/internal/handlers"
 	"github.com/pinbrain/urlshortener/internal/logger"
+	"github.com/pinbrain/urlshortener/internal/service"
 	"github.com/pinbrain/urlshortener/internal/storage"
 	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -67,9 +71,12 @@ func Run() error {
 
 	logger.Log.Infow("Starting server", "addr", serverConf.ServerAddress)
 
-	var server *http.Server
+	service := service.NewService(urlStore, serverConf.BaseURL)
 
-	// Запуск сервера
+	var server *http.Server
+	var grpcServer *grpc.Server
+
+	// Запуск HTTP сервера
 	g.Go(func() (err error) {
 		defer func() {
 			errRec := recover()
@@ -114,6 +121,26 @@ func Run() error {
 		return nil
 	})
 
+	// Запуск gRPC сервера
+	g.Go(func() (err error) {
+		defer func() {
+			errRec := recover()
+			if errRec != nil {
+				err = fmt.Errorf("a panic occurred: %v", errRec)
+			}
+		}()
+		listen, err := net.Listen("tcp", serverConf.GRPCAddress)
+		if err != nil {
+			return fmt.Errorf("listen tcp has failed: %w", err)
+		}
+		grpcServer = grpcserver.NewGRPCServer(&service, serverConf.TrustedSubnet)
+		logger.Log.Infow("Starting gRPC server", "addr", serverConf.GRPCAddress)
+		if err = grpcServer.Serve(listen); err != nil {
+			return fmt.Errorf("listen and serve grpc has failed: %w", err)
+		}
+		return nil
+	})
+
 	// Отслеживаем успешное завершение работы сервера
 	g.Go(func() error {
 		defer logger.Log.Info("Service has been shutdown")
@@ -131,6 +158,9 @@ func Run() error {
 
 		urlHandler.Close()
 		logger.Log.Info("Handler goroutines finished")
+
+		grpcServer.GracefulStop()
+		logger.Log.Info("gRPC server stopped")
 
 		urlStore.Close()
 		logger.Log.Info("URL store closed")

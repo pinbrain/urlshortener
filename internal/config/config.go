@@ -16,6 +16,7 @@ import (
 // ServerConf определяет структуру конфигурации.
 type ServerConf struct {
 	ServerAddress string     `env:"SERVER_ADDRESS" json:"server_address"`       // Адрес запуска HTTP-сервера.
+	GRPCAddress   string     `env:"GRPC_ADDRESS" json:"grpc_address"`           // Адрес запуска gRPC-сервера.
 	BaseURL       url.URL    `env:"BASE_URL" json:"-"`                          // Базовый адрес сокращённого URL.
 	LogLevel      string     `env:"LOG_LEVEL" json:"-"`                         // Уровень логирования.
 	StorageFile   string     `env:"FILE_STORAGE_PATH" json:"file_storage_path"` // Полное имя файла, куда сохраняются данные.
@@ -67,10 +68,11 @@ func parseCIDR(cidr string) (*net.IPNet, error) {
 // loadFlags загружает параметры конфигурации из флагов.
 func loadFlags(cfg *ServerConf) error {
 	flag.StringVar(&cfg.ServerAddress, "a", ":8080", "Адрес запуска HTTP-сервера")
+	flag.StringVar(&cfg.GRPCAddress, "g", ":3200", "Адрес запуска gRPC-сервера")
 	flag.StringVar(&cfg.LogLevel, "l", "info", "Уровень логирования")
 	flag.StringVar(&cfg.DSN, "d", "", "Строка с адресом подключения к БД")
 	flag.BoolVar(&cfg.EnableHTTPS, "s", false, "Флаг включения HTTPS")
-	storageFileStr := flag.String("f", "/tmp/short-url-db.json", "Полное имя файла, куда сохраняются данные")
+	storageFileStr := flag.String("f", "", "Полное имя файла, куда сохраняются данные")
 	baseURLStr := flag.String("b", "http://localhost:8080", "Базовый адрес результирующего сокращённого URL")
 	trustedSubnet := flag.String("t", "", "Доверенная подсеть (CIDR)")
 	configFileStr := flag.String("c", "", "Имя файла json с конфигурацией приложения")
@@ -157,6 +159,9 @@ func loadJSON(cfg *ServerConf) error {
 	}
 	if cfg.ServerAddress == "" {
 		cfg.ServerAddress = jsonCfg.ServerAddress
+	}
+	if cfg.GRPCAddress == "" {
+		cfg.GRPCAddress = jsonCfg.GRPCAddress
 	}
 	if cfg.StorageFile == "" {
 		cfg.StorageFile = jsonCfg.StorageFile
