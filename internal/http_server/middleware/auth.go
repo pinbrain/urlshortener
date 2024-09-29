@@ -10,12 +10,13 @@ import (
 
 	appCtx "github.com/pinbrain/urlshortener/internal/context"
 	"github.com/pinbrain/urlshortener/internal/logger"
+	"github.com/pinbrain/urlshortener/internal/service"
 	"github.com/pinbrain/urlshortener/internal/storage"
 )
 
 // AuthMiddleware описывает структуру обработчика для авторизации и аутентификации.
 type AuthMiddleware struct {
-	urlStore storage.URLStorage // Хранилище приложения
+	service *service.Service // Сервис с бизнес логикой приложения
 }
 
 // JWTClaims описывает структуру JWT токена.
@@ -31,9 +32,9 @@ const (
 )
 
 // NewAuthMiddleware создает обработчик авторизации и аутентификации.
-func NewAuthMiddleware(urlStore storage.URLStorage) AuthMiddleware {
+func NewAuthMiddleware(service *service.Service) AuthMiddleware {
 	return AuthMiddleware{
-		urlStore: urlStore,
+		service: service,
 	}
 }
 
@@ -61,8 +62,8 @@ func (amw *AuthMiddleware) AuthenticateUser(h http.Handler) http.Handler {
 				return
 			}
 		} else {
-			userData, err = amw.urlStore.GetUser(r.Context(), jwtClaims.UserID)
-			if err != nil && !errors.Is(err, storage.ErrNoData) {
+			userData, err = amw.service.GetUser(r.Context(), jwtClaims.UserID)
+			if err != nil && !errors.Is(err, service.ErrNotFound) {
 				logger.Log.Errorw("Error getting user data by jwt claims from store", "err", err)
 				http.Error(w, "Internal server error", http.StatusInternalServerError)
 				return
@@ -109,7 +110,7 @@ func (amw *AuthMiddleware) RequireUser(h http.Handler) http.Handler {
 // createNewReqUser создает нового пользователя.
 // Добавляет его данные в контекст запроса и добавляет cookie с jwt токеном.
 func (amw *AuthMiddleware) createNewReqUser(ctx context.Context, w http.ResponseWriter) (*storage.User, error) {
-	userData, err := amw.urlStore.CreateUser(ctx)
+	userData, err := amw.service.CreateUser(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error creating user in store: %w", err)
 	}

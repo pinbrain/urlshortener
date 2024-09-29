@@ -67,7 +67,7 @@ func (s *Service) ShortenURL(ctx context.Context, url string) (string, error) {
 			logger.Log.Errorw("Error while saving url for shorten", "err", err)
 			return "", errors.Join(ErrStorageError, err)
 		}
-		return "", ErrURLConflict
+		return s.baseURL.JoinPath(urlID).String(), ErrURLConflict
 	}
 	shortURL := s.baseURL.JoinPath(urlID).String()
 	return shortURL, nil

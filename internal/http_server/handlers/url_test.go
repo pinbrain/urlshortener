@@ -18,7 +18,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/pinbrain/urlshortener/internal/middleware"
+	"github.com/pinbrain/urlshortener/internal/http_server/middleware"
+	"github.com/pinbrain/urlshortener/internal/service"
 	"github.com/pinbrain/urlshortener/internal/storage"
 	"github.com/pinbrain/urlshortener/internal/storage/mocks"
 )
@@ -108,7 +109,8 @@ func TestURLHandler_HandleShortenURL(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			baseURL, err := url.Parse(tt.baseURL)
 			require.NoError(t, err)
-			handler := NewURLHandler(mockStorage, *baseURL)
+			service := service.NewService(mockStorage, *baseURL)
+			handler := NewURLHandler(&service, *baseURL)
 
 			if tt.urlStore != nil {
 				mockStorage.EXPECT().
@@ -225,7 +227,8 @@ func TestURLHandler_HandleJSONShortenURL(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			baseURL, err := url.Parse(tt.baseURL)
 			require.NoError(t, err)
-			handler := NewURLHandler(mockStorage, *baseURL)
+			service := service.NewService(mockStorage, *baseURL)
+			handler := NewURLHandler(&service, *baseURL)
 
 			if tt.urlStore != nil {
 				mockStorage.EXPECT().
@@ -347,10 +350,12 @@ func TestURLHandler_HandleRedirect(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := NewURLHandler(mockStorage, url.URL{
+			baseURL := url.URL{
 				Scheme: "http",
 				Host:   "localhost:8080",
-			})
+			}
+			service := service.NewService(mockStorage, baseURL)
+			handler := NewURLHandler(&service, baseURL)
 
 			if tt.urlStore != nil {
 				mockStorage.EXPECT().
@@ -490,7 +495,8 @@ func TestURLHandler_HandleShortenBatchURL(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			baseURL, err := url.Parse(tt.baseURL)
 			require.NoError(t, err)
-			handler := NewURLHandler(mockStorage, *baseURL)
+			service := service.NewService(mockStorage, *baseURL)
+			handler := NewURLHandler(&service, *baseURL)
 
 			if tt.urlStore != nil {
 				if tt.urlStore.storeError != nil {
@@ -539,8 +545,10 @@ func TestURLHandler_HandleGetUsersURLs(t *testing.T) {
 
 	mockStorage := mocks.NewMockURLStorage(ctrl)
 
-	urlHandler := NewURLHandler(mockStorage, url.URL{Scheme: "http", Host: "localhost:8080"})
-	router := NewURLRouter(urlHandler, mockStorage, nil)
+	baseURL := url.URL{Scheme: "http", Host: "localhost:8080"}
+	service := service.NewService(mockStorage, baseURL)
+	urlHandler := NewURLHandler(&service, baseURL)
+	router := NewURLRouter(urlHandler, &service, nil)
 
 	user := &storage.User{ID: 1}
 	jwtString, err := middleware.BuildJWTString(user.ID)
@@ -633,8 +641,10 @@ func TestURLHandler_HandleDeleteUserURLs(t *testing.T) {
 
 	mockStorage := mocks.NewMockURLStorage(ctrl)
 
-	urlHandler := NewURLHandler(mockStorage, url.URL{Scheme: "http", Host: "localhost:8080"})
-	router := NewURLRouter(urlHandler, mockStorage, nil)
+	baseURL := url.URL{Scheme: "http", Host: "localhost:8080"}
+	service := service.NewService(mockStorage, baseURL)
+	urlHandler := NewURLHandler(&service, baseURL)
+	router := NewURLRouter(urlHandler, &service, nil)
 
 	user := &storage.User{ID: 1}
 	jwtString, err := middleware.BuildJWTString(user.ID)
@@ -758,7 +768,8 @@ func TestURLHandler_HandlePing(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := NewURLHandler(mockStorage, url.URL{})
+			service := service.NewService(mockStorage, url.URL{})
+			handler := NewURLHandler(&service, url.URL{})
 
 			mockStorage.EXPECT().
 				Ping(gomock.Any()).

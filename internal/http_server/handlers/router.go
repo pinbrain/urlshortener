@@ -7,18 +7,18 @@ import (
 	"github.com/go-chi/chi/v5"
 	chi_mwr "github.com/go-chi/chi/v5/middleware"
 
-	"github.com/pinbrain/urlshortener/internal/middleware"
-	"github.com/pinbrain/urlshortener/internal/storage"
+	"github.com/pinbrain/urlshortener/internal/http_server/middleware"
+	"github.com/pinbrain/urlshortener/internal/service"
 )
 
 // NewURLRouter определяет роутинг приложения с указанием обработчиков запроса и промежуточных обработчиков.
-func NewURLRouter(urlHandler URLHandler, urlStore storage.URLStorage, trustedSubnet *net.IPNet) chi.Router {
+func NewURLRouter(urlHandler URLHandler, service *service.Service, trustedSubnet *net.IPNet) chi.Router {
 	r := chi.NewRouter()
 
 	r.Use(middleware.HTTPRequestLogger)
 	r.Use(middleware.GzipMiddleware)
 
-	amw := middleware.NewAuthMiddleware(urlStore)
+	amw := middleware.NewAuthMiddleware(service)
 	ipmw := middleware.NewIPGuardMiddleware(trustedSubnet)
 
 	r.Use(amw.AuthenticateUser)
