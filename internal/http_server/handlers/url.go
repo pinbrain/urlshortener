@@ -297,11 +297,13 @@ func (h *URLHandler) HandleGetStats(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logger.Log.Errorw("Error trying to get urls count", "err", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
 	}
 	stats.Users, err = h.service.GetUsersCount(r.Context())
 	if err != nil {
 		logger.Log.Errorw("Error trying to get users count", "err", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")

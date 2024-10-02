@@ -177,7 +177,10 @@ func (s *URLShortenerServer) GetStats(
 }
 
 // Ping обрабатывает запрос на проверку соединения с хранилищем данных.
-func (s *URLShortenerServer) Ping(_ context.Context, _ *pb.PingReq) (*pb.PingRes, error) {
+func (s *URLShortenerServer) Ping(ctx context.Context, _ *pb.PingReq) (*pb.PingRes, error) {
 	var response pb.PingRes
+	if err := s.service.Ping(ctx); err != nil {
+		return nil, status.Error(codes.Internal, "Failed to ping database")
+	}
 	return &response, nil
 }

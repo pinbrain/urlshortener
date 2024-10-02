@@ -787,3 +787,107 @@ func TestURLHandler_HandlePing(t *testing.T) {
 		})
 	}
 }
+
+func TestURLHandler_HandleGetStats(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStorage := mocks.NewMockURLStorage(ctrl)
+
+	type want struct {
+		resBody    string
+		statusCode int
+	}
+
+	type stat struct {
+		err   error
+		count int
+	}
+	type urlStore struct {
+		users *stat
+		urls  *stat
+	}
+
+	tests := []struct {
+		urlStore urlStore
+		name     string
+		want     want
+	}{
+		{
+			name: "Успешный запрос",
+			urlStore: urlStore{
+				users: &stat{
+					count: 10,
+				},
+				urls: &stat{
+					count: 20,
+				},
+			},
+			want: want{
+				statusCode: http.StatusOK,
+				resBody:    `{"users":10,"urls":20}`,
+			},
+		},
+		{
+			name: "Ошибка получения количества ссылок",
+			urlStore: urlStore{
+				urls: &stat{
+					err: errors.New("store error"),
+				},
+			},
+			want: want{
+				statusCode: http.StatusInternalServerError,
+			},
+		},
+		{
+			name: "Ошибка получения количества ссылок",
+			urlStore: urlStore{
+				urls: &stat{
+					count: 20,
+				},
+				users: &stat{
+					err: errors.New("store error"),
+				},
+			},
+			want: want{
+				statusCode: http.StatusInternalServerError,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.urlStore.urls != nil {
+				mockStorage.EXPECT().GetURLsCount(gomock.Any()).
+					Times(1).Return(tt.urlStore.urls.count, tt.urlStore.urls.err)
+			} else {
+				mockStorage.EXPECT().GetURLsCount(gomock.Any()).Times(0)
+			}
+			if tt.urlStore.users != nil {
+				mockStorage.EXPECT().GetUsersCount(gomock.Any()).
+					Times(1).Return(tt.urlStore.users.count, tt.urlStore.users.err)
+			} else {
+				mockStorage.EXPECT().GetUsersCount(gomock.Any()).Times(0)
+			}
+			baseURL := url.URL{
+				Scheme: "http",
+				Host:   "localhost:8080",
+			}
+			service := service.NewService(mockStorage, baseURL)
+			handler := NewURLHandler(&service, baseURL)
+
+			request := httptest.NewRequest(http.MethodGet, "/api/internal/stats", nil)
+			w := httptest.NewRecorder()
+			handler.HandleGetStats(w, request)
+
+			res := w.Result()
+			assert.Equal(t, tt.want.statusCode, res.StatusCode)
+
+			if tt.want.resBody != "" {
+				defer res.Body.Close()
+				resBody, readErr := io.ReadAll(res.Body)
+				require.NoError(t, readErr)
+				assert.JSONEq(t, tt.want.resBody, string(resBody))
+			}
+		})
+	}
+}
