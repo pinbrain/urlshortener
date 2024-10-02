@@ -2,21 +2,25 @@
 package handlers
 
 import (
+	"net"
+
 	"github.com/go-chi/chi/v5"
 	chi_mwr "github.com/go-chi/chi/v5/middleware"
 
-	"github.com/pinbrain/urlshortener/internal/middleware"
-	"github.com/pinbrain/urlshortener/internal/storage"
+	"github.com/pinbrain/urlshortener/internal/http_server/middleware"
+	"github.com/pinbrain/urlshortener/internal/service"
 )
 
 // NewURLRouter определяет роутинг приложения с указанием обработчиков запроса и промежуточных обработчиков.
-func NewURLRouter(urlHandler URLHandler, urlStore storage.URLStorage) chi.Router {
+func NewURLRouter(urlHandler URLHandler, service *service.Service, trustedSubnet *net.IPNet) chi.Router {
 	r := chi.NewRouter()
 
 	r.Use(middleware.HTTPRequestLogger)
 	r.Use(middleware.GzipMiddleware)
 
-	amw := middleware.NewAuthMiddleware(urlStore)
+	amw := middleware.NewAuthMiddleware(service)
+	ipmw := middleware.NewIPGuardMiddleware(trustedSubnet)
+
 	r.Use(amw.AuthenticateUser)
 	r.Mount("/debug", chi_mwr.Profiler())
 
@@ -33,6 +37,11 @@ func NewURLRouter(urlHandler URLHandler, urlStore storage.URLStorage) chi.Router
 			r.Use(amw.RequireUser)
 			r.Get("/urls", urlHandler.HandleGetUsersURLs)
 			r.Delete("/urls", urlHandler.HandleDeleteUserURLs)
+		})
+
+		r.Route("/internal", func(r chi.Router) {
+			r.Use(ipmw.GuardByIP)
+			r.Get("/stats", urlHandler.HandleGetStats)
 		})
 	})
 

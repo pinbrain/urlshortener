@@ -605,3 +605,139 @@ func TestPgExecuteDelBatch(t *testing.T) {
 
 	urlPgStore.executeDelBatch(context.TODO(), delBatch)
 }
+
+func TestPgGetUsersCount(t *testing.T) {
+	mock, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mock.Close()
+
+	urlPgStore := &URLPgStore{
+		pool: mock,
+	}
+
+	type dbRes struct {
+		rows []any
+		err  error
+	}
+
+	type want struct {
+		count int
+		err   error
+	}
+
+	tests := []struct {
+		name  string
+		dbRes *dbRes
+		want  want
+	}{
+		{
+			name: "Успешный запрос",
+			dbRes: &dbRes{
+				rows: []any{1},
+			},
+			want: want{
+				count: 1,
+			},
+		},
+		{
+			name: "Ошибка БД",
+			dbRes: &dbRes{
+				err: errors.New("db error"),
+			},
+			want: want{
+				err: fmt.Errorf("failed to select users count from db: %w", errors.New("db error")),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.dbRes != nil {
+				mockExpectQuery := mock.ExpectQuery("SELECT .+ FROM users;")
+				if tt.dbRes.err != nil {
+					mockExpectQuery.WillReturnError(tt.dbRes.err)
+				} else if tt.dbRes.rows != nil {
+					fmt.Println("going to return")
+					mockExpectQuery.WillReturnRows(mock.NewRows([]string{"count"}).
+						AddRow(tt.dbRes.rows...))
+				}
+			}
+			count, storeErr := urlPgStore.GetUsersCount(context.TODO())
+			if tt.want.err != nil {
+				assert.Equal(t, tt.want.err, storeErr)
+			} else {
+				require.NoError(t, storeErr)
+				assert.Equal(t, tt.want.count, count)
+			}
+		})
+	}
+}
+
+func TestPgGetURLsCount(t *testing.T) {
+	mock, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mock.Close()
+
+	urlPgStore := &URLPgStore{
+		pool: mock,
+	}
+
+	type dbRes struct {
+		rows []any
+		err  error
+	}
+
+	type want struct {
+		count int
+		err   error
+	}
+
+	tests := []struct {
+		name  string
+		dbRes *dbRes
+		want  want
+	}{
+		{
+			name: "Успешный запрос",
+			dbRes: &dbRes{
+				rows: []any{1},
+			},
+			want: want{
+				count: 1,
+			},
+		},
+		{
+			name: "Ошибка БД",
+			dbRes: &dbRes{
+				err: errors.New("db error"),
+			},
+			want: want{
+				err: fmt.Errorf("failed to select urls count from db: %w", errors.New("db error")),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.dbRes != nil {
+				mockExpectQuery := mock.ExpectQuery("SELECT .+ FROM shorten_urls WHERE is_deleted = false;")
+				if tt.dbRes.err != nil {
+					mockExpectQuery.WillReturnError(tt.dbRes.err)
+				} else if tt.dbRes.rows != nil {
+					fmt.Println("going to return")
+					mockExpectQuery.WillReturnRows(mock.NewRows([]string{"count"}).
+						AddRow(tt.dbRes.rows...))
+				}
+			}
+			count, storeErr := urlPgStore.GetURLsCount(context.TODO())
+			if tt.want.err != nil {
+				assert.Equal(t, tt.want.err, storeErr)
+			} else {
+				require.NoError(t, storeErr)
+				assert.Equal(t, tt.want.count, count)
+			}
+		})
+	}
+}

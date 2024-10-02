@@ -11,7 +11,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/pinbrain/urlshortener/internal/handlers"
+	"github.com/pinbrain/urlshortener/internal/http_server/handlers"
+	"github.com/pinbrain/urlshortener/internal/service"
 	"github.com/pinbrain/urlshortener/internal/storage"
 )
 
@@ -24,7 +25,8 @@ func ExampleURLHandler_HandleJSONShortenURL() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	handler := handlers.NewURLHandler(mockStorage, *baseURL)
+	service := service.NewService(mockStorage, *baseURL)
+	handler := handlers.NewURLHandler(&service, *baseURL)
 
 	reqBody := `{"url":"http://example.com"}`
 	request := httptest.NewRequest(http.MethodPost, "/api/shorten", strings.NewReader(reqBody))
@@ -50,7 +52,8 @@ func ExampleURLHandler_HandleShortenBatchURL() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	handler := handlers.NewURLHandler(mockStorage, *baseURL)
+	service := service.NewService(mockStorage, *baseURL)
+	handler := handlers.NewURLHandler(&service, *baseURL)
 
 	reqBody := `[
 								{
@@ -86,7 +89,8 @@ func ExampleURLHandler_HandleRedirect() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	handler := handlers.NewURLHandler(mockStorage, *baseURL)
+	service := service.NewService(mockStorage, *baseURL)
+	handler := handlers.NewURLHandler(&service, *baseURL)
 
 	shortURL, err := mockStorage.SaveURL(context.Background(), "http://example.com", 1)
 	if err != nil {

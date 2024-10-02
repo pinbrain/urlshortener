@@ -6,17 +6,20 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/pinbrain/urlshortener/internal/config"
-	"github.com/pinbrain/urlshortener/internal/handlers"
+	grpcserver "github.com/pinbrain/urlshortener/internal/grpc_server"
+	httpserver "github.com/pinbrain/urlshortener/internal/http_server"
 	"github.com/pinbrain/urlshortener/internal/logger"
+	"github.com/pinbrain/urlshortener/internal/service"
 	"github.com/pinbrain/urlshortener/internal/storage"
-	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -63,13 +66,14 @@ func Run() error {
 		return err
 	}
 
-	urlHandler := handlers.NewURLHandler(urlStore, serverConf.BaseURL)
-
 	logger.Log.Infow("Starting server", "addr", serverConf.ServerAddress)
 
-	var server *http.Server
+	service := service.NewService(urlStore, serverConf.BaseURL)
 
-	// Запуск сервера
+	var server *httpserver.URLShortenerServer
+	var grpcServer *grpc.Server
+
+	// Запуск HTTP сервера
 	g.Go(func() (err error) {
 		defer func() {
 			errRec := recover()
@@ -77,39 +81,32 @@ func Run() error {
 				err = fmt.Errorf("a panic occurred: %v", errRec)
 			}
 		}()
-		if serverConf.EnableHTTPS {
-			manager := &autocert.Manager{
-				// директория для хранения сертификатов
-				Cache: autocert.DirCache("cache-dir"),
-				// функция, принимающая Terms of Service издателя сертификатов
-				Prompt: autocert.AcceptTOS,
-				// перечень доменов, для которых будут поддерживаться сертификаты
-				HostPolicy: autocert.HostWhitelist("mysite.ru"),
-			}
-			// конструируем сервер с поддержкой TLS
-			server = &http.Server{
-				Addr:    ":443",
-				Handler: handlers.NewURLRouter(urlHandler, urlStore),
-				// для TLS-конфигурации используем менеджер сертификатов
-				TLSConfig: manager.TLSConfig(),
-			}
-			if err = server.ListenAndServeTLS("", ""); err != nil {
-				if errors.Is(err, http.ErrServerClosed) {
-					return nil
-				}
-				return fmt.Errorf("listen and server has failed: %w", err)
-			}
-			return nil
-		}
-		server = &http.Server{
-			Addr:    serverConf.ServerAddress,
-			Handler: handlers.NewURLRouter(urlHandler, urlStore),
-		}
+		server = httpserver.NewHTTPServer(&service, serverConf)
 		if err = server.ListenAndServe(); err != nil {
 			if errors.Is(err, http.ErrServerClosed) {
 				return nil
 			}
 			return fmt.Errorf("listen and server has failed: %w", err)
+		}
+		return nil
+	})
+
+	// Запуск gRPC сервера
+	g.Go(func() (err error) {
+		defer func() {
+			errRec := recover()
+			if errRec != nil {
+				err = fmt.Errorf("a panic occurred: %v", errRec)
+			}
+		}()
+		listen, err := net.Listen("tcp", serverConf.GRPCAddress)
+		if err != nil {
+			return fmt.Errorf("listen tcp has failed: %w", err)
+		}
+		grpcServer = grpcserver.NewGRPCServer(&service, serverConf.TrustedSubnet)
+		logger.Log.Infow("Starting gRPC server", "addr", serverConf.GRPCAddress)
+		if err = grpcServer.Serve(listen); err != nil {
+			return fmt.Errorf("listen and serve grpc has failed: %w", err)
 		}
 		return nil
 	})
@@ -129,8 +126,8 @@ func Run() error {
 		}
 		logger.Log.Info("HTTP server stopped")
 
-		urlHandler.Close()
-		logger.Log.Info("Handler goroutines finished")
+		grpcServer.GracefulStop()
+		logger.Log.Info("gRPC server stopped")
 
 		urlStore.Close()
 		logger.Log.Info("URL store closed")

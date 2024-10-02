@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package urlshortener;
+
+option go_package = "github.com/pinbrain/urlshortener/internal/grpc/proto";
+
+message ShortenURLReq {
+  string original_url = 1;
+}
+
+message ShortenURLRes {
+  string short_url = 1;
+}
+
+message ShortenBatchURLReq {
+  message BatchURL {
+    string correlation_id = 1;
+    string original_url = 2;
+  }
+  repeated BatchURL urls = 1;
+}
+
+message ShortenBatchURLRes {
+  message BatchURL {
+    string correlation_id = 1;
+    string short_url = 2;
+  }
+  repeated BatchURL urls = 1;
+}
+
+message GetURLReq {
+  string url_id = 1;
+}
+
+message GetURLRes {
+  string original_url = 1;
+}
+
+message GetUsersURLsReq {}
+
+message GetUsersURLsRes {
+  message UserURL {
+    string original_url = 1;
+    string short_url = 2;
+  }
+  repeated UserURL urls = 1;
+}
+
+message DeleteUserURLsReq {
+  repeated string urls = 1;
+}
+
+message DeleteUserURLsRes {}
+
+message GetStatsReq {}
+
+message GetStatsRes {
+  int32 urls = 1;
+  int32 users = 2;
+}
+
+message PingReq {}
+
+message PingRes {}
+
+service URLShortener {
+  rpc ShortenURL(ShortenURLReq) returns (ShortenURLRes);
+  rpc ShortenBatchURL(ShortenBatchURLReq) returns (ShortenBatchURLRes);
+  rpc GetURL(GetURLReq) returns (GetURLRes);
+  rpc GetUserURLs(GetUsersURLsReq) returns (GetUsersURLsRes);
+  rpc DeleteUserURLs(DeleteUserURLsReq) returns (DeleteUserURLsRes);
+  rpc GetStats(GetStatsReq) returns (GetStatsRes);
+  rpc Ping(PingReq) returns (PingRes);
+}

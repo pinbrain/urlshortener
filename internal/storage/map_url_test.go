@@ -334,3 +334,24 @@ func BenchmarkDeleteUserURLs(b *testing.B) {
 		}
 	}
 }
+
+func TestGetStats(t *testing.T) {
+	ctx := context.Background()
+	store, err := NewURLMapStore("")
+	require.NoError(t, err)
+	defer store.Close()
+
+	user, err := store.CreateUser(ctx)
+	require.NoError(t, err)
+	usersCount, err := store.GetUsersCount(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, usersCount)
+	urlsCount, err := store.GetURLsCount(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 0, urlsCount)
+	_, err = store.SaveURL(ctx, "some", user.ID)
+	require.NoError(t, err)
+	urlsCount, err = store.GetURLsCount(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, urlsCount)
+}
