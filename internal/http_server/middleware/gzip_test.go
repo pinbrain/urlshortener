@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/pinbrain/urlshortener/internal/middleware"
+	"github.com/pinbrain/urlshortener/internal/http_server/middleware"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

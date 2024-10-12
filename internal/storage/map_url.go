@@ -297,6 +297,22 @@ func (s *URLMapStore) syncFileData() {
 	}
 }
 
+// GetURLsCount возвращает количество сокращенных ссылок в БД.
+func (s *URLMapStore) GetURLsCount(_ context.Context) (int, error) {
+	var count int
+	for _, v := range s.store {
+		if !v.IsDeleted {
+			count++
+		}
+	}
+	return count, nil
+}
+
+// GetURLsCount возвращает количество пользователей в БД.
+func (s *URLMapStore) GetUsersCount(_ context.Context) (int, error) {
+	return len(s.userStore), nil
+}
+
 // Ping проверяет связь с хранилищем. В данном случае ничего не делает.
 func (s *URLMapStore) Ping(_ context.Context) error {
 	return nil

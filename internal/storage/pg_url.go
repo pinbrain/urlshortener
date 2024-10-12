@@ -338,6 +338,30 @@ func (db *URLPgStore) IsValidID(id string) bool {
 	return validIDReg.MatchString(id)
 }
 
+// GetURLsCount возвращает количество сокращенных ссылок в БД.
+func (db *URLPgStore) GetURLsCount(ctx context.Context) (int, error) {
+	row := db.pool.QueryRow(ctx,
+		`SELECT count(*) FROM shorten_urls WHERE is_deleted = false;`,
+	)
+	var count int
+	if err := row.Scan(&count); err != nil {
+		return count, fmt.Errorf("failed to select urls count from db: %w", err)
+	}
+	return count, nil
+}
+
+// GetURLsCount возвращает количество пользователей в БД.
+func (db *URLPgStore) GetUsersCount(ctx context.Context) (int, error) {
+	row := db.pool.QueryRow(ctx,
+		`SELECT count(*) FROM users;`,
+	)
+	var count int
+	if err := row.Scan(&count); err != nil {
+		return count, fmt.Errorf("failed to select users count from db: %w", err)
+	}
+	return count, nil
+}
+
 // Ping проверяет связь с БД.
 func (db *URLPgStore) Ping(ctx context.Context) error {
 	err := db.pool.Ping(ctx)
